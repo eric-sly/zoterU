@@ -380,12 +380,14 @@ var CodexMarkdownAttachBridge = {
 		return [
 			{
 				id: "codex-mineru-parse-selected",
+				l10nID: "slys-zotero-parse-selected",
 				label: "使用 MinerU 批量解析为带图 Markdown 附件",
 				getTasks: (items) => this.collectPDFTasks(items),
 				run: ({ window, selectedItems }) => this.handleParseCommand({ window, selectedItems, replaceExisting: false })
 			},
 			{
 				id: "codex-mineru-reparse-selected",
+				l10nID: "slys-zotero-reparse-selected",
 				label: "重新解析并替换已有 MinerU Markdown 附件",
 				getTasks: (items) => this.collectPDFTasks(items, { replaceExisting: true }),
 				run: ({ window, selectedItems }) => this.handleParseCommand({ window, selectedItems, replaceExisting: true })
@@ -459,7 +461,7 @@ var CodexMarkdownAttachBridge = {
 				menus: [
 					{
 						menuType: "menuitem",
-						label: "用系统默认软件打开文件",
+						l10nID: "slys-zotero-open-file",
 						icon: iconURL,
 						onShowing: (_event, context) => {
 							let items = Array.isArray(context?.items) ? context.items : [];
@@ -476,11 +478,11 @@ var CodexMarkdownAttachBridge = {
 					},
 					{
 						menuType: "submenu",
-						label: "MinerU",
+						l10nID: "slys-zotero-mineru",
 						icon: iconURL,
 						menus: menuDefinitions.map((definition) => ({
 							menuType: "menuitem",
-							label: definition.label,
+							l10nID: definition.l10nID,
 							icon: iconURL,
 							onShowing: (_event, context) => {
 								if (typeof context?.setEnabled === "function") {
