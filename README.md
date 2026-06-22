@@ -1,21 +1,21 @@
 # sly's zotero
 
-`sly's zotero` 是一个 Zotero 插件，把三类工作放在同一个本地插件里：
+`sly's zotero` 是一个 Zotero 9+ 插件，把三类工作放在同一个本地插件里：
 
 - 在 Zotero 右键菜单中批量调用 MinerU 解析 PDF，并把带图片资源的 Markdown 保存回原条目。
-- 给期刊论文、学位论文和 PDF 附件提供“用系统默认软件打开文件”的右键入口。
+- 给期刊论文、学位论文和 PDF 附件提供"用系统默认软件打开文件"的右键入口。
 - 在本机暴露 MCP-compatible HTTP JSON-RPC 接口，供 agent 调用同一套 Zotero/MinerU 能力。
 
 当前稳定包：
 
 ```text
-F:\LLM\codex workspace\slys-zotero-1.0.0.xpi
+F:\LLM\opencode workspace\slys-zotero-1.1.0.xpi
 ```
 
 ## 安装
 
 1. Zotero -> 工具 -> 插件。
-2. 从文件安装 `slys-zotero-1.0.0.xpi`。
+2. 从文件安装 `slys-zotero-1.1.0.xpi`。
 3. 完全退出并重启 Zotero。
 4. 确认 Zotero 设置里出现 `sly's zotero`。
 
@@ -41,12 +41,23 @@ MinerU -> 使用 MinerU 批量解析为带图 Markdown 附件
 MinerU -> 重新解析并替换已有 MinerU Markdown 附件
 ```
 
+解析过程中进度窗口会显示当前使用的模型版本（`pipeline` 或 `vlm`），格式为：
+
+```text
+MinerU PDF 解析 [pipeline]
+论文标题 [pipeline] (上传 PDF)
+论文标题 [pipeline] (等待解析)
+论文标题 [pipeline] (完成)
+```
+
 解析完成后，插件会把结果导入 Zotero storage：
 
 ```text
 Zotero Data\storage\<attachmentKey>\MinerU Parse - <title>.md
 Zotero Data\storage\<attachmentKey>\images\...
 ```
+
+ZIP 中 MinerU 输出的其他文件（`layout.json`、`content_list.json`、`model.json`、`origin.pdf` 等）也会一并解压到同一目录。
 
 Markdown 附件会打标签：
 
@@ -63,14 +74,14 @@ Markdown 附件会打标签：
 
 ### 默认软件打开 PDF
 
-右键菜单末尾会出现：
+右键菜单中会出现：
 
 ```text
 用系统默认软件打开文件
 MinerU
 ```
 
-“用系统默认软件打开文件”只对以下单选对象显示：
+"用系统默认软件打开文件"只对以下单选对象显示：
 
 - `journalArticle` 期刊论文，且有本地 PDF 附件
 - `thesis` 学位论文，且有本地 PDF 附件
@@ -167,7 +178,7 @@ Invoke-RestMethod http://127.0.0.1:23122/ping
 {
   "ok": true,
   "service": "sly's zotero",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "port": 23122
 }
 ```
@@ -243,6 +254,7 @@ Invoke-RestMethod http://127.0.0.1:23122/ping
 - 会上传 PDF。
 - 会消耗 token 文件数和页数额度。
 - `replaceExisting: true` 会删除匹配的旧 `#MinerU-Parse` Markdown 附件。
+- Token 额度在上传成功后才扣减（1.1 版修复）。
 
 #### `parse_selected_pdfs_with_mineru`
 
@@ -315,7 +327,7 @@ Invoke-RestMethod http://127.0.0.1:23122/ping
 2. 多 token 输入框添加/删除正常。
 3. 模型选择 `pipeline` / `vlm` 正常保存并用于 API payload `model_version`。
 4. 清理暂存缓存按钮可用。
-5. 右键批量解析成功。
+5. 右键批量解析成功，进度窗口全程显示模型版本。
 6. 图片资源复制到 Zotero storage 后可用。
 7. 页数计数和 token 用量统计正确。
 8. MCP 工具实测通过：
@@ -326,18 +338,20 @@ Invoke-RestMethod http://127.0.0.1:23122/ping
    - `parse_items_with_mineru`
    - `parse_selected_pdfs_with_mineru`
 9. 默认软件打开菜单只对期刊论文、学位论文和 PDF 附件显示。
+10. 右键菜单使用官方 `Zotero.MenuManager` API，文字和图标正常显示。
+11. MCP 错误处理正常（无效 key、空参数、未知工具）。
 
 ## 开发
 
 源码目录：
 
 ```text
-F:\LLM\codex workspace\codex-md-attach-bridge-official
+F:\LLM\opencode workspace\codex-md-attach-bridge-official
 ```
 
 主要文件：
 
-- `manifest.json`：Zotero 插件 manifest
+- `manifest.json`：Zotero 插件 manifest（`strict_min_version: 9.0`）
 - `bootstrap.js`：插件启动、偏好页注册、窗口加载/卸载
 - `bridge.js`：HTTP/MCP 服务、右键菜单、MinerU API、附件导入、缓存清理
 - `preferences.xhtml`：设置页结构
@@ -345,20 +359,23 @@ F:\LLM\codex workspace\codex-md-attach-bridge-official
 - `preferences.css`：设置页样式
 - `prefs.js`：默认偏好值
 - `icon.svg`：插件图标
+- `locale/zh-CN/slys-zotero.ftl`：中文 Fluent 本地化
+- `locale/en-US/slys-zotero.ftl`：英文 Fluent 本地化
 
 ### 语法检查
 
 ```powershell
-cd "F:\LLM\codex workspace\codex-md-attach-bridge-official"
+cd "F:\LLM\opencode workspace\codex-md-attach-bridge-official"
 node --check bridge.js
+node --check bootstrap.js
 node --check preferences.js
 ```
 
 ### 打包
 
 ```powershell
-cd "F:\LLM\codex workspace\codex-md-attach-bridge-official"
-Compress-Archive -Path * -DestinationPath "F:\LLM\codex workspace\slys-zotero-1.0.0.xpi" -Force
+cd "F:\LLM\opencode workspace\codex-md-attach-bridge-official"
+Compress-Archive -Path * -DestinationPath "F:\LLM\opencode workspace\slys-zotero-1.1.0.xpi" -Force
 ```
 
 ### 修改版本号
@@ -368,7 +385,7 @@ Compress-Archive -Path * -DestinationPath "F:\LLM\codex workspace\slys-zotero-1.
 ```json
 {
   "name": "sly's zotero",
-  "version": "1.0.0"
+  "version": "1.1.0"
 }
 ```
 
@@ -394,9 +411,9 @@ Invoke-RestMethod http://127.0.0.1:23122/ping
 
 完全卸载旧版插件，重启 Zotero，再安装当前 XPI。
 
-### 右键菜单重复
+### 右键菜单文字不显示
 
-完全退出 Zotero 后重启。旧版热加载可能留下菜单节点或监听器，重启会清掉。
+确认 `locale/` 目录在 XPI 内，重启 Zotero。菜单文字通过 Fluent 本地化系统加载。
 
 ### MinerU 解析失败
 
@@ -417,3 +434,18 @@ Zotero Data\storage\<attachmentKey>\images\...
 ```
 
 如果 Markdown 是通过 `attach_markdown_*` 导入，确认 `assetMode` 使用的是 `folder`。
+
+## 1.1 版变更日志
+
+- 只支持 Zotero 9+（`strict_min_version: 9.0`）。
+- 右键菜单改用官方 `Zotero.MenuManager` API，消除手动 DOM 注入导致的监听器泄漏和菜单重复。
+- 菜单文字通过 Fluent 本地化系统加载（`locale/zh-CN/` 和 `locale/en-US/`）。
+- Token 额度在上传成功后才扣减（修复上传失败仍扣额度的问题）。
+- PDF 页数估算改为只读尾部 64KB，避免大文件 OOM。
+- HTTP 请求读取超时从 1 秒提升到 6 秒。
+- `Zotero.Promise.delay` 替换为标准 `setTimeout`（兼容 Zotero 8+ 移除 Bluebird）。
+- 设置页输入保存加 debounce，减少频繁写 prefs。
+- 解析进度窗口全程显示模型版本。
+- `unregisterMenu` 使用返回的注册 ID 而非 menuID 字符串。
+- 统一 `failures` 返回结构为 `{title, error}` 对象数组。
+- `getRelativePath` 改用 `PathUtils.split` 提高跨平台兼容性。
