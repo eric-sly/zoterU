@@ -791,7 +791,8 @@ var CodexMarkdownAttachBridge = {
 			return;
 		}
 		let progress = new Zotero.ProgressWindow({ closeOnClick: true });
-		progress.changeHeadline("MinerU PDF 解析");
+		let settings = this.getSettings();
+		progress.changeHeadline(`MinerU PDF 解析 [${settings.modelVersion}]`);
 		progress.show();
 		let successes = 0;
 		let failures = [];
@@ -800,7 +801,7 @@ var CodexMarkdownAttachBridge = {
 			let title = task.attachment.getField("title") || this.fileNameFromPath(task.attachment.getFilePath?.() || "");
 			let itemProgress = new progress.ItemProgress("chrome://zotero/skin/treeitem-attachment-pdf.png", title);
 			let update = ({ text = "", percent = null } = {}) => {
-				if (typeof itemProgress.setText === "function") itemProgress.setText(text ? `${title} (${text})` : title);
+				if (typeof itemProgress.setText === "function") itemProgress.setText(text ? `${title} [${settings.modelVersion}] (${text})` : `${title} [${settings.modelVersion}]`);
 				if (Number.isFinite(percent)) itemProgress.setProgress(percent);
 			};
 			try {
