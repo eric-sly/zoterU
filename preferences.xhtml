@@ -1,0 +1,60 @@
+<vbox
+	xmlns="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul"
+	xmlns:html="http://www.w3.org/1999/xhtml"
+	id="codex-mineru-prefpane"
+	flex="1"
+	onload="if (window.CodexMineruPreferences) { window.CodexMineruPreferences.init(); }"
+>
+	<html:div class="mineru-pane">
+		<html:h2>sly's zotero 设置</html:h2>
+		<html:div class="mineru-grid">
+			<html:label for="mineru-api-base-url">MinerU API Base URL</html:label>
+			<html:input id="mineru-api-base-url" type="url" placeholder="https://mineru.net/api/v4" />
+
+			<html:label>模型版本</html:label>
+			<html:div id="mineru-model-version" class="mineru-model-options">
+				<html:label>
+					<html:input type="radio" name="mineru-model-version" value="pipeline" />
+					pipeline
+				</html:label>
+				<html:label>
+					<html:input type="radio" name="mineru-model-version" value="vlm" />
+					vlm
+				</html:label>
+			</html:div>
+
+			<html:label for="mineru-title-prefix">Markdown 附件标题前缀</html:label>
+			<html:input id="mineru-title-prefix" type="text" placeholder="MinerU Parse" />
+
+			<html:label for="mineru-poll-interval-sec">轮询间隔(秒)</html:label>
+			<html:input id="mineru-poll-interval-sec" type="number" min="1" max="60" step="1" />
+
+			<html:label for="mineru-timeout-sec">单文件超时(秒)</html:label>
+			<html:input id="mineru-timeout-sec" type="number" min="30" max="7200" step="10" />
+
+			<html:label for="mineru-daily-file-limit">每 token 每日文件上限</html:label>
+			<html:input id="mineru-daily-file-limit" type="number" min="1" max="5000" step="1" />
+
+			<html:label for="mineru-priority-page-limit">每 token 优先解析页数上限</html:label>
+			<html:input id="mineru-priority-page-limit" type="number" min="1" max="100000" step="1" />
+
+			<html:label>MinerU Tokens</html:label>
+			<html:div>
+				<html:div id="mineru-token-list" class="mineru-token-list"></html:div>
+				<html:button id="mineru-add-token-button" type="button" class="mineru-small-button">添加 token</html:button>
+			</html:div>
+		</html:div>
+
+		<html:div class="mineru-actions">
+			<html:button id="mineru-save-button" type="button">保存设置</html:button>
+			<html:button id="mineru-refresh-usage-button" type="button">刷新 token 用量</html:button>
+			<html:button id="mineru-clear-cache-button" type="button">清理暂存缓存</html:button>
+			<html:span id="mineru-status"></html:span>
+		</html:div>
+		<html:pre id="mineru-usage-output" class="mineru-test-output"></html:pre>
+		<html:p class="mineru-help">
+			右键 Zotero 条目选择 MinerU 可批量解析 PDF 并保存为带图 Markdown 附件；agent 可通过 http://127.0.0.1:23122/mcp 调用同一套流程。
+		</html:p>
+	</html:div>
+	<html:script src="preferences.js"></html:script>
+</vbox>
