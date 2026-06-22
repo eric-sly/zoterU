@@ -142,7 +142,9 @@ var CodexMarkdownAttachBridge = {
 			let headers = requestText.slice(0, headerEnd);
 			let match = headers.match(/Content-Length:\s*(\d+)/i);
 			let contentLength = match ? parseInt(match[1], 10) : 0;
-			if (requestText.length >= headerEnd + 4 + contentLength) break;
+			let bodyText = requestText.slice(headerEnd + 4);
+			let bodyByteLength = new TextEncoder().encode(bodyText).length;
+			if (bodyByteLength >= contentLength) break;
 		}
 		return requestText;
 	},
@@ -462,6 +464,7 @@ var CodexMarkdownAttachBridge = {
 					{
 						menuType: "menuitem",
 						l10nID: "slys-zotero-open-file",
+						label: "用系统默认软件打开文件",
 						icon: iconURL,
 						onShowing: (_event, context) => {
 							try {
@@ -485,10 +488,12 @@ var CodexMarkdownAttachBridge = {
 					{
 						menuType: "submenu",
 						l10nID: "slys-zotero-mineru",
+						label: "MinerU",
 						icon: iconURL,
 						menus: menuDefinitions.map((definition) => ({
 							menuType: "menuitem",
 							l10nID: definition.l10nID,
+							label: definition.label,
 							icon: iconURL,
 							onShowing: (_event, context) => {
 								try {

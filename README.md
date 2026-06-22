@@ -9,13 +9,13 @@
 当前稳定包：
 
 ```text
-F:\LLM\opencode workspace\slys-zotero-1.1.0.xpi
+F:\LLM\codex workspace\slys-zotero-1.1.1.xpi
 ```
 
 ## 安装
 
 1. Zotero -> 工具 -> 插件。
-2. 从文件安装 `slys-zotero-1.1.0.xpi`。
+2. 从文件安装 `slys-zotero-1.1.1.xpi`。
 3. 完全退出并重启 Zotero。
 4. 确认 Zotero 设置里出现 `sly's zotero`。
 
@@ -178,7 +178,7 @@ Invoke-RestMethod http://127.0.0.1:23122/ping
 {
   "ok": true,
   "service": "sly's zotero",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "port": 23122
 }
 ```
@@ -346,7 +346,7 @@ Invoke-RestMethod http://127.0.0.1:23122/ping
 源码目录：
 
 ```text
-F:\LLM\opencode workspace\codex-md-attach-bridge-official
+F:\LLM\codex workspace\codex-md-attach-bridge-official
 ```
 
 主要文件：
@@ -365,7 +365,7 @@ F:\LLM\opencode workspace\codex-md-attach-bridge-official
 ### 语法检查
 
 ```powershell
-cd "F:\LLM\opencode workspace\codex-md-attach-bridge-official"
+cd "F:\LLM\codex workspace\codex-md-attach-bridge-official"
 node --check bridge.js
 node --check bootstrap.js
 node --check preferences.js
@@ -374,8 +374,8 @@ node --check preferences.js
 ### 打包
 
 ```powershell
-cd "F:\LLM\opencode workspace\codex-md-attach-bridge-official"
-Compress-Archive -Path * -DestinationPath "F:\LLM\opencode workspace\slys-zotero-1.1.0.xpi" -Force
+cd "F:\LLM\codex workspace\codex-md-attach-bridge-official"
+Compress-Archive -Path * -DestinationPath "F:\LLM\codex workspace\slys-zotero-1.1.1.xpi" -Force
 ```
 
 ### 修改版本号
@@ -385,7 +385,7 @@ Compress-Archive -Path * -DestinationPath "F:\LLM\opencode workspace\slys-zotero
 ```json
 {
   "name": "sly's zotero",
-  "version": "1.1.0"
+  "version": "1.1.1"
 }
 ```
 
