@@ -20,44 +20,14 @@ async function startup({ id, version, rootURI }, reason) {
 	CodexMarkdownAttachBridge.init({ id, version, rootURI });
 	CodexMarkdownAttachBridge.start();
 	try {
-		let prefPaneCandidates = [
-			{
-				pluginID: id,
-				src: rootURI + "preferences.xhtml",
-				scripts: [rootURI + "preferences.js"],
-				stylesheets: [rootURI + "preferences.css"],
-				label: "sly's zotero",
-				image: rootURI + "icon.svg"
-			},
-			{
-				pluginID: id,
-				src: "preferences.xhtml",
-				scripts: [rootURI + "preferences.js"],
-				stylesheets: [rootURI + "preferences.css"],
-				label: "sly's zotero",
-				image: "icon.svg"
-			},
-			{
-				pluginID: id,
-				src: "preferences.xhtml",
-				label: "sly's zotero",
-				image: "icon.svg"
-			}
-		];
-		let prefRegistered = false;
-		for (let options of prefPaneCandidates) {
-			try {
-				Zotero.PreferencePanes.register(options);
-				prefRegistered = true;
-				break;
-			}
-			catch (e) {
-				Zotero.debug("sly's zotero: preference pane registration attempt failed: " + e);
-			}
-		}
-		if (!prefRegistered) {
-			throw new Error("All preference pane registration attempts failed");
-		}
+		Zotero.PreferencePanes.register({
+			pluginID: id,
+			src: rootURI + "preferences.xhtml",
+			scripts: [rootURI + "preferences.js"],
+			stylesheets: [rootURI + "preferences.css"],
+			label: "sly's zotero",
+			image: rootURI + "icon.svg"
+		});
 	}
 	catch (e) {
 		Zotero.debug("sly's zotero: preference pane registration failed: " + e);
