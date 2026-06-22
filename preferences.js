@@ -1,6 +1,7 @@
 var CodexMineruPreferences = {
 	PREF_BRANCH: "extensions.codex-md-attach-bridge.",
 	initialized: false,
+	_saveTimer: null,
 
 	FIELDS: [
 		{ id: "mineru-api-base-url", pref: "mineruApiBaseURL", type: "string", fallback: "https://mineru.net/api/v4" },
@@ -10,6 +11,14 @@ var CodexMineruPreferences = {
 		{ id: "mineru-daily-file-limit", pref: "mineruDailyFileLimit", type: "int", fallback: 5000 },
 		{ id: "mineru-priority-page-limit", pref: "mineruPriorityPageLimit", type: "int", fallback: 1000, legacyPref: "mineruPriorityFileLimit" }
 	],
+
+	debounceSave() {
+		if (this._saveTimer) clearTimeout(this._saveTimer);
+		this._saveTimer = setTimeout(() => {
+			this._saveTimer = null;
+			this.saveSettings({ silent: true });
+		}, 300);
+	},
 
 	$(id) {
 		return document.getElementById(id);
@@ -140,8 +149,11 @@ var CodexMineruPreferences = {
 		input.type = "password";
 		input.placeholder = "MinerU token";
 		input.value = entry?.token || "";
-		input.addEventListener("input", () => this.saveSettings({ silent: true }));
-		input.addEventListener("change", () => this.saveSettings({ silent: true }));
+		input.addEventListener("input", () => this.debounceSave());
+		input.addEventListener("change", () => {
+			if (this._saveTimer) { clearTimeout(this._saveTimer); this._saveTimer = null; }
+			this.saveSettings({ silent: true });
+		});
 
 		let removeButton = this.createHTMLElement("button");
 		removeButton.type = "button";
@@ -225,8 +237,8 @@ var CodexMineruPreferences = {
 			for (let field of this.FIELDS) {
 				let input = this.$(field.id);
 				if (!input) continue;
-				input.addEventListener("change", () => this.saveSettings({ silent: true }));
-				input.addEventListener("input", () => this.saveSettings({ silent: true }));
+				input.addEventListener("change", () => this.debounceSave());
+				input.addEventListener("input", () => this.debounceSave());
 			}
 			for (let input of this.getModelInputs()) {
 				input.addEventListener("change", () => this.saveSettings({ silent: true }));

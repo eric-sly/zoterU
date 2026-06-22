@@ -5,8 +5,7 @@ var CodexMarkdownAttachBridge = {
 	socket: null,
 	port: 23122,
 	mcpSessionId: "zotero-mineru-bridge",
-	menuRegistered: false,
-	popupListeners: new Map(),
+	menuRegisteredID: null,
 	ROOT_MENU_ID: "codex-mineru-bridge-menu",
 	OPEN_FILE_MENU_ID: "slys-zotero-open-file-default",
 	PREF_BRANCH: "extensions.codex-md-attach-bridge.",
@@ -127,7 +126,9 @@ var CodexMarkdownAttachBridge = {
 			.createInstance(Ci.nsIConverterInputStream);
 		converter.init(input, "UTF-8", 0, 0);
 		let requestText = "";
-		for (let i = 0; i < 100; i++) {
+		let startTime = Date.now();
+		let deadlineMS = 6000;
+		while (Date.now() - startTime < deadlineMS) {
 			let available = input.available();
 			if (!available) {
 				await new Promise((resolve) => setTimeout(resolve, 10));
@@ -375,10 +376,6 @@ var CodexMarkdownAttachBridge = {
 		return this.rootURI ? this.rootURI + "icon.svg" : "";
 	},
 
-	supportsMenuManager() {
-		return false;
-	},
-
 	getContextMenuDefinitions() {
 		return [
 			{
@@ -406,110 +403,85 @@ var CodexMarkdownAttachBridge = {
 		return "";
 	},
 
-	getSelectedPDFForExternalOpenFast(window) {
-		let items = window?.ZoteroPane?.getSelectedItems?.() || [];
-		if (items.length !== 1) return null;
+	canOpenPDFFromItems(items) {
+		if (!Array.isArray(items) || items.length !== 1) return false;
 		let item = items[0];
-		let attachment = null;
-		if (item?.isAttachment?.()) {
-			if (!item.isPDFAttachment?.()) return null;
-			attachment = item;
+		if (item?.isAttachment?.()) return !!item.isPDFAttachment?.() && !!item.getFilePath?.();
+		if (item?.isRegularItem?.()) {
+			let itemType = this.getRegularItemTypeName(item);
+			if (!["journalArticle", "thesis"].includes(itemType)) return false;
+			for (let attachmentID of item.getAttachments()) {
+				let candidate = Zotero.Items.get(attachmentID);
+				if (candidate?.isPDFAttachment?.() && candidate.getFilePath?.()) return true;
+			}
+		}
+		return false;
+	},
+
+	async openPDFFromItems(items, window) {
+		if (!Array.isArray(items) || items.length !== 1) return;
+		let item = items[0];
+		let filePath = null;
+		if (item?.isPDFAttachment?.()) {
+			filePath = item.getFilePath?.();
 		}
 		else if (item?.isRegularItem?.()) {
 			let itemType = this.getRegularItemTypeName(item);
-			if (!["journalArticle", "thesis"].includes(itemType)) return null;
+			if (!["journalArticle", "thesis"].includes(itemType)) return;
 			for (let attachmentID of item.getAttachments()) {
 				let candidate = Zotero.Items.get(attachmentID);
 				if (candidate?.isPDFAttachment?.()) {
-					attachment = candidate;
-					break;
+					filePath = candidate.getFilePath?.();
+					if (filePath) break;
 				}
 			}
 		}
-		if (!attachment?.isPDFAttachment?.()) return null;
-		let filePath = attachment.getFilePath?.();
-		if (!filePath) return null;
-		return { attachment, filePath };
-	},
-
-	async getSelectedPDFForExternalOpen(window) {
-		let fast = this.getSelectedPDFForExternalOpenFast(window);
-		if (fast) return fast;
-		let items = window?.ZoteroPane?.getSelectedItems?.() || [];
-		if (items.length !== 1) return null;
-		let item = items[0];
-		if (item?.isRegularItem?.()) {
-			let itemType = this.getRegularItemTypeName(item);
-			if (!["journalArticle", "thesis"].includes(itemType)) return null;
-		}
-		if (!item?.getBestAttachment) return null;
-		let attachment = await item.getBestAttachment();
-		if (!attachment?.isPDFAttachment?.()) return null;
-		let filePath = attachment.getFilePath?.();
-		if (!filePath) return null;
-		return { attachment, filePath };
-	},
-
-	async openSelectedPDFWithSystemDefault(window) {
-		let selected = await this.getSelectedPDFForExternalOpen(window);
-		if (!selected?.filePath) {
+		if (!filePath) {
 			this.showAlert(window, "sly's zotero", "当前选中条目没有可打开的本地 PDF 文件。");
 			return;
 		}
-		Zotero.launchFile(selected.filePath);
-	},
-
-	setOpenFileMenuItemLabel(openFileMenuitem) {
-		openFileMenuitem.removeAttribute("data-l10n-id");
-		openFileMenuitem.removeAttribute("l10n-id");
-		openFileMenuitem.setAttribute("label", "用系统默认软件打开文件");
-	},
-
-	removeSlysMenuNodes(doc, keepNodes = []) {
-		let shouldKeep = (node) => keepNodes.some((keep) => keep === node || keep?.contains?.(node));
-		let selectors = [
-			`#${this.OPEN_FILE_MENU_ID}`,
-			`#${this.ROOT_MENU_ID}`,
-			"#codex-mineru-parse-selected",
-			"#codex-mineru-reparse-selected"
-		];
-		for (let selector of selectors) {
-			for (let node of Array.from(doc.querySelectorAll(selector))) {
-				if (shouldKeep(node)) continue;
-				try { node.remove(); } catch (_e) {}
-			}
-		}
-		for (let node of Array.from(doc.querySelectorAll("menuitem, menu"))) {
-			if (shouldKeep(node)) continue;
-			let label = node.getAttribute?.("label") || "";
-			if (label === "用系统默认软件打开文件") {
-				try { node.remove(); } catch (_e) {}
-			}
+		try { Zotero.launchFile(filePath); }
+		catch (e) {
+			this.log(`Open file failed: ${e?.message || e}`);
+			this.showAlert(window, "sly's zotero", `打开文件失败: ${e?.message || e}`);
 		}
 	},
 
 	registerMenuForZotero8() {
-		if (!this.supportsMenuManager() || this.menuRegistered) return false;
+		if (this.menuRegisteredID !== null) return true;
 		try {
 			let iconURL = this.getMenuIconURL();
 			let menuDefinitions = this.getContextMenuDefinitions();
-			Zotero.MenuManager.registerMenu({
+			this.menuRegisteredID = Zotero.MenuManager.registerMenu({
 				menuID: this.ROOT_MENU_ID,
 				pluginID: this.id,
 				target: "main/library/item",
 				menus: [
 					{
+						menuType: "menuitem",
+						label: "用系统默认软件打开文件",
+						icon: iconURL,
+						onShowing: (_event, context) => {
+							let items = Array.isArray(context?.items) ? context.items : [];
+							if (typeof context?.setVisible === "function") context.setVisible(this.canOpenPDFFromItems(items));
+							if (typeof context?.setEnabled === "function") context.setEnabled(this.canOpenPDFFromItems(items));
+						},
+						onCommand: (_event, context) => {
+							let window = context?.menuElem?.ownerGlobal || Zotero.getMainWindows?.()?.[0] || null;
+							let items = Array.isArray(context?.items) ? context.items : [];
+							this.openPDFFromItems(items, window).catch((e) => {
+								this.log(`Open file command failed: ${e?.message || e}`);
+							});
+						}
+					},
+					{
 						menuType: "submenu",
 						label: "MinerU",
 						icon: iconURL,
-						iconURL,
-						image: iconURL,
 						menus: menuDefinitions.map((definition) => ({
 							menuType: "menuitem",
 							label: definition.label,
 							icon: iconURL,
-							iconURL,
-							image: iconURL,
 							onShowing: (_event, context) => {
 								if (typeof context?.setEnabled === "function") {
 									let selectedItems = Array.isArray(context?.items) ? context.items : [];
@@ -525,8 +497,7 @@ var CodexMarkdownAttachBridge = {
 					}
 				]
 			});
-			this.menuRegistered = true;
-			return true;
+			return this.menuRegisteredID !== null;
 		}
 		catch (e) {
 			this.log(`MenuManager registration failed: ${e}`);
@@ -537,108 +508,25 @@ var CodexMarkdownAttachBridge = {
 
 	addToWindow(window) {
 		window.CodexMarkdownAttachBridge = this;
-		if (this.menuRegistered) return;
-		let doc = window.document;
-		let popup = doc.getElementById("zotero-itemmenu")
-			|| doc.getElementById("item-tree-context-menu")
-			|| doc.getElementById("zotero-item-tree-menu");
-		if (!popup) return;
-		this.removeSlysMenuNodes(doc);
-
-		let iconURL = this.getMenuIconURL();
-		let openFileMenuitem = doc.createXULElement("menuitem");
-		openFileMenuitem.id = this.OPEN_FILE_MENU_ID;
-		this.setOpenFileMenuItemLabel(openFileMenuitem);
-		openFileMenuitem.setAttribute("class", "menuitem-iconic");
-		openFileMenuitem.setAttribute("image", iconURL);
-		openFileMenuitem.style.listStyleImage = `url("${iconURL}")`;
-		openFileMenuitem.addEventListener("command", () => {
-			this.openSelectedPDFWithSystemDefault(window).catch((e) => {
-				this.log(`Open file failed: ${e?.message || e}`);
-				this.showAlert(window, "sly's zotero", `打开文件失败: ${e?.message || e}`);
-			});
-		});
-
-		let rootMenu = doc.createXULElement("menu");
-		rootMenu.id = this.ROOT_MENU_ID;
-		rootMenu.setAttribute("label", "MinerU");
-		rootMenu.setAttribute("class", "menu-iconic");
-		rootMenu.setAttribute("image", iconURL);
-		rootMenu.style.listStyleImage = `url("${iconURL}")`;
-		let subPopup = doc.createXULElement("menupopup");
-		rootMenu.appendChild(subPopup);
-
-		let menuItems = [];
-		for (let definition of this.getContextMenuDefinitions()) {
-			let menuitem = doc.createXULElement("menuitem");
-			menuitem.id = definition.id;
-			menuitem.setAttribute("label", definition.label);
-			menuitem.setAttribute("class", "menuitem-iconic");
-			menuitem.setAttribute("image", iconURL);
-			menuitem.style.listStyleImage = `url("${iconURL}")`;
-			menuitem.addEventListener("command", () => definition.run({ window, selectedItems: null }));
-			subPopup.appendChild(menuitem);
-			menuItems.push({ definition, menuitem });
-		}
-		popup.appendChild(openFileMenuitem);
-		popup.appendChild(rootMenu);
-
-		let onPopupShowing = () => {
-			this.removeSlysMenuNodes(doc, [openFileMenuitem, rootMenu]);
-			if (!openFileMenuitem.parentNode) {
-				popup.appendChild(openFileMenuitem);
-			}
-			if (!rootMenu.parentNode) {
-				popup.appendChild(rootMenu);
-			}
-			if (openFileMenuitem.nextSibling !== rootMenu) {
-				popup.insertBefore(openFileMenuitem, rootMenu);
-			}
-			this.setOpenFileMenuItemLabel(openFileMenuitem);
-			window.setTimeout(() => this.setOpenFileMenuItemLabel(openFileMenuitem), 0);
-			let selectedItems = window.ZoteroPane?.getSelectedItems?.() || [];
-			let openFileCandidate = this.getSelectedPDFForExternalOpenFast(window);
-			openFileMenuitem.hidden = !openFileCandidate;
-			openFileMenuitem.collapsed = !openFileCandidate;
-			openFileMenuitem.disabled = !openFileCandidate;
-			let hasEnabledChild = false;
-			for (let { definition, menuitem } of menuItems) {
-				let hasTasks = definition.getTasks(selectedItems).length > 0;
-				menuitem.disabled = !hasTasks;
-				hasEnabledChild ||= hasTasks;
-			}
-			rootMenu.disabled = !hasEnabledChild;
-		};
-		popup.addEventListener("popupshowing", onPopupShowing);
-		this.popupListeners.set(window, { popup, onPopupShowing });
 	},
 
 	addToAllWindows() {
-		let windows = Zotero.getMainWindows?.() || [];
-		if (this.supportsMenuManager() && this.registerMenuForZotero8()) {
-			for (let win of windows) if (win.ZoteroPane) this.addToWindow(win);
-			return;
+		this.registerMenuForZotero8();
+		for (let win of Zotero.getMainWindows?.() || []) {
+			if (win.ZoteroPane) this.addToWindow(win);
 		}
-		for (let win of windows) if (win.ZoteroPane) this.addToWindow(win);
 	},
 
 	removeFromWindow(window) {
 		if (window.CodexMarkdownAttachBridge === this) {
 			try { delete window.CodexMarkdownAttachBridge; } catch (_e) {}
 		}
-		window.document.getElementById(this.OPEN_FILE_MENU_ID)?.remove();
-		window.document.getElementById(this.ROOT_MENU_ID)?.remove();
-		let listenerData = this.popupListeners.get(window);
-		if (listenerData) {
-			listenerData.popup.removeEventListener("popupshowing", listenerData.onPopupShowing);
-			this.popupListeners.delete(window);
-		}
 	},
 
 	removeFromAllWindows() {
-		if (this.supportsMenuManager() && this.menuRegistered) {
-			try { Zotero.MenuManager.unregisterMenu(this.ROOT_MENU_ID); } catch (e) { this.log(`Menu unregister failed: ${e}`); }
-			this.menuRegistered = false;
+		if (this.menuRegisteredID !== null) {
+			try { Zotero.MenuManager.unregisterMenu(this.menuRegisteredID); } catch (e) { this.log(`Menu unregister failed: ${e}`); }
+			this.menuRegisteredID = null;
 		}
 		for (let win of Zotero.getMainWindows?.() || []) {
 			if (win.ZoteroPane) this.removeFromWindow(win);
@@ -907,13 +795,13 @@ var CodexMarkdownAttachBridge = {
 				update({ text: "完成", percent: 100 });
 			}
 			catch (e) {
-				failures.push(`${title}: ${e?.message || e}`);
+				failures.push({ title, error: String(e?.message || e) });
 				update({ text: "失败", percent: 100 });
 			}
 		}
 		progress.addDescription(`完成 ${successes}/${tasks.length}`);
 		progress.startCloseTimer(5000);
-		if (failures.length) this.showAlert(window, "MinerU 部分失败", failures.slice(0, 10).join("\n"));
+		if (failures.length) this.showAlert(window, "MinerU 部分失败", failures.slice(0, 10).map((f) => `${f.title}: ${f.error}`).join("\n"));
 		return { success: !failures.length, total: tasks.length, successes, failures, results };
 	},
 
@@ -1017,7 +905,16 @@ var CodexMarkdownAttachBridge = {
 		let filePath = attachment.getFilePath?.();
 		if (!filePath || !await IOUtils.exists(filePath)) return 1;
 		try {
-			let bytes = await IOUtils.read(filePath);
+			let stat = await IOUtils.stat(filePath);
+			let fileSize = stat.size || 0;
+			let tailBytes = 65536;
+			let bytes;
+			if (fileSize > tailBytes) {
+				bytes = await IOUtils.read(filePath, { offset: fileSize - tailBytes, maxBytes: tailBytes });
+			}
+			else {
+				bytes = await IOUtils.read(filePath);
+			}
 			let text = new TextDecoder("latin1").decode(bytes);
 			let matches = text.match(/\/Type\s*\/Page\b/g);
 			if (matches?.length) return matches.length;
@@ -1099,7 +996,6 @@ var CodexMarkdownAttachBridge = {
 		let batchID = applyUploadResult?.data?.batch_id;
 		let uploadURL = applyUploadResult?.data?.file_urls?.[0];
 		if (!batchID || !uploadURL) throw new Error("MinerU API 未返回 batch_id 或 upload_url");
-		options.onUploadAccepted?.();
 
 		this.reportStatus(options.onStatus, "上传 PDF", 30);
 		let uploadResponse = await fetch(uploadURL, { method: "PUT", body: fileBytes });
@@ -1107,6 +1003,7 @@ var CodexMarkdownAttachBridge = {
 			let errText = await uploadResponse.text();
 			throw new Error(`上传 PDF 失败 ${uploadResponse.status}: ${errText.slice(0, 300)}`);
 		}
+		options.onUploadAccepted?.();
 
 		this.reportStatus(options.onStatus, "等待解析", 50);
 		let result = await this.pollMineruExtractResult({
@@ -1165,7 +1062,7 @@ var CodexMarkdownAttachBridge = {
 			}
 			if (result?.state === "done") return result;
 			if (result?.state === "failed") throw new Error(result.err_msg || "MinerU 解析失败");
-			await Zotero.Promise.delay(pollIntervalMS);
+			await new Promise((resolve) => setTimeout(resolve, pollIntervalMS));
 		}
 		throw new Error(`MinerU 解析超时，最后状态: ${lastState || "unknown"}`);
 	},
@@ -1250,7 +1147,7 @@ var CodexMarkdownAttachBridge = {
 				await IOUtils.move(mdPath, desiredPath);
 				mdPath = desiredPath;
 			}
-			let assetCount = Math.max(0, entries.length - 1);
+			let assetCount = entries.filter((entry) => !/\.m(?:ark)?d$/i.test(entry.entryName)).length;
 			return { tempDir, assetRoot: mdParent, mdPath, markdownEntryName, assetCount };
 		}
 		finally {
@@ -1396,7 +1293,7 @@ var CodexMarkdownAttachBridge = {
 	async copyMarkdownAssetFolder({ mdPath, mdAttachment, assetRoot }) {
 		let sourceRoot = assetRoot || PathUtils.parent(mdPath);
 		if (!await IOUtils.exists(sourceRoot)) throw new Error(`Asset root does not exist: ${sourceRoot}`);
-		let storagePath = PathUtils.parent(await mdAttachment.getFilePath());
+		let storagePath = PathUtils.parent(mdAttachment.getFilePath());
 		let mdLeafName = PathUtils.filename(mdPath);
 		let copied = [];
 		await this.copyDirectoryContents({
@@ -1418,7 +1315,7 @@ var CodexMarkdownAttachBridge = {
 			if (!relativePath || relativePath.startsWith("..")) continue;
 			let targetPath = this.joinLocalPath(targetRoot, relativePath);
 			let stat = await IOUtils.stat(sourcePath);
-			if (stat.type === "directory") {
+			if (stat.type === "directory" || stat.isDir === true) {
 				await IOUtils.makeDirectory(targetPath, { createAncestors: true });
 				await this.copyDirectoryContents({ sourceRoot, sourceDir: sourcePath, targetRoot, skipLeafNames, copied });
 			}
@@ -1431,13 +1328,13 @@ var CodexMarkdownAttachBridge = {
 	},
 
 	getRelativePath(rootPath, childPath) {
-		let normalizedRoot = rootPath.replace(/[\\\/]+$/, "");
-		let normalizedChild = childPath;
-		let prefix = normalizedRoot + "\\";
-		if (normalizedChild.startsWith(prefix)) return normalizedChild.slice(prefix.length);
-		prefix = normalizedRoot + "/";
-		if (normalizedChild.startsWith(prefix)) return normalizedChild.slice(prefix.length);
-		return "";
+		let rootParts = PathUtils.split(rootPath);
+		let childParts = PathUtils.split(childPath);
+		if (childParts.length < rootParts.length) return "";
+		for (let i = 0; i < rootParts.length; i++) {
+			if (childParts[i] !== rootParts[i]) return "";
+		}
+		return childParts.slice(rootParts.length).join("/");
 	},
 
 	joinLocalPath(rootPath, relativePath) {
