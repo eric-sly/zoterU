@@ -464,9 +464,15 @@ var CodexMarkdownAttachBridge = {
 						l10nID: "slys-zotero-open-file",
 						icon: iconURL,
 						onShowing: (_event, context) => {
-							let items = Array.isArray(context?.items) ? context.items : [];
-							if (typeof context?.setVisible === "function") context.setVisible(this.canOpenPDFFromItems(items));
-							if (typeof context?.setEnabled === "function") context.setEnabled(this.canOpenPDFFromItems(items));
+							try {
+								let items = Array.isArray(context?.items) ? context.items : [];
+								let canOpen = this.canOpenPDFFromItems(items);
+								if (typeof context?.setVisible === "function") context.setVisible(canOpen);
+								if (typeof context?.setEnabled === "function") context.setEnabled(canOpen);
+							}
+							catch (e) {
+								this.log(`onShowing open-file failed: ${e?.message || e}`);
+							}
 						},
 						onCommand: (_event, context) => {
 							let window = context?.menuElem?.ownerGlobal || Zotero.getMainWindows?.()?.[0] || null;
@@ -485,9 +491,14 @@ var CodexMarkdownAttachBridge = {
 							l10nID: definition.l10nID,
 							icon: iconURL,
 							onShowing: (_event, context) => {
-								if (typeof context?.setEnabled === "function") {
-									let selectedItems = Array.isArray(context?.items) ? context.items : [];
-									context.setEnabled(definition.getTasks(selectedItems).length > 0);
+								try {
+									if (typeof context?.setEnabled === "function") {
+										let selectedItems = Array.isArray(context?.items) ? context.items : [];
+										context.setEnabled(definition.getTasks(selectedItems).length > 0);
+									}
+								}
+								catch (e) {
+									this.log(`onShowing ${definition.id} failed: ${e?.message || e}`);
 								}
 							},
 							onCommand: (_event, context) => {
@@ -510,6 +521,12 @@ var CodexMarkdownAttachBridge = {
 
 	addToWindow(window) {
 		window.CodexMarkdownAttachBridge = this;
+		try {
+			window.MozXULElement?.insertFTLIfNeeded?.("slys-zotero.ftl");
+		}
+		catch (e) {
+			this.log(`Failed to load Fluent file: ${e?.message || e}`);
+		}
 	},
 
 	addToAllWindows() {
