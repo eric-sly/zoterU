@@ -952,7 +952,7 @@ var CodexMarkdownAttachBridge = {
 		let settings = this.getSettings();
 		let pageCount = await this.estimatePDFPageCount(task.attachment);
 		let selected = this.selectToken(settings, { allowQueuedToken, pageCount });
-		this.reportStatus(onStatus, selected.queued ? `使用排队额度 ${selected.tokenInfo.label} (${pageCount}页)` : `使用优先额度 ${selected.tokenInfo.label} (${pageCount}页)`, 5);
+		this.reportStatus(onStatus, `${settings.modelVersion} 模型 | ${selected.queued ? "排队额度" : "优先额度"} ${selected.tokenInfo.label} (${pageCount}页)`, 5);
 		let parsed = await this.parseAttachmentWithMineru(task.attachment, {
 			...settings,
 			apiToken: selected.tokenInfo.token
