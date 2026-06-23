@@ -9,7 +9,8 @@ var CodexMineruPreferences = {
 		{ id: "mineru-poll-interval-sec", pref: "mineruPollIntervalSec", type: "int", fallback: 3 },
 		{ id: "mineru-timeout-sec", pref: "mineruTimeoutSec", type: "int", fallback: 120 },
 		{ id: "mineru-daily-file-limit", pref: "mineruDailyFileLimit", type: "int", fallback: 5000 },
-		{ id: "mineru-priority-page-limit", pref: "mineruPriorityPageLimit", type: "int", fallback: 1000, legacyPref: "mineruPriorityFileLimit" }
+		{ id: "mineru-priority-page-limit", pref: "mineruPriorityPageLimit", type: "int", fallback: 1000, legacyPref: "mineruPriorityFileLimit" },
+		{ id: "kb-root-path", pref: "kbRootPath", type: "string", fallback: "" }
 	],
 
 	debounceSave() {

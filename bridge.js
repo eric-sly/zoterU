@@ -512,6 +512,30 @@ var CodexMarkdownAttachBridge = {
 								definition.run({ window, selectedItems });
 							}
 						}))
+					},
+					{
+						menuType: "menuitem",
+						l10nID: "slys-zotero-export-kb",
+						label: "导出到知识库",
+						icon: iconURL,
+						onShowing: (_event, context) => {
+							try {
+								let items = Array.isArray(context?.items) ? context.items : [];
+								let canExport = this.canExportToKB(items);
+								if (typeof context?.setVisible === "function") context.setVisible(canExport);
+								if (typeof context?.setEnabled === "function") context.setEnabled(canExport);
+							}
+							catch (e) {
+								this.log(`onShowing export-kb failed: ${e?.message || e}`);
+							}
+						},
+						onCommand: (_event, context) => {
+							let window = context?.menuElem?.ownerGlobal || Zotero.getMainWindows?.()?.[0] || null;
+							let items = Array.isArray(context?.items) ? context.items : [];
+							this.exportToKnowledgeBase({ window, selectedItems: items }).catch((e) => {
+								this.log(`Export to KB failed: ${e?.message || e}`);
+							});
+						}
 					}
 				]
 			});
@@ -574,6 +598,7 @@ var CodexMarkdownAttachBridge = {
 		}
 		if (!Number.isFinite(priorityPageLimit) || priorityPageLimit <= 0) priorityPageLimit = 1000;
 		let titlePrefix = String(Zotero.Prefs.get(this.PREF_BRANCH + "mineruTitlePrefix", true) || "MinerU Parse").trim() || "MinerU Parse";
+		let kbRootPath = String(Zotero.Prefs.get(this.PREF_BRANCH + "kbRootPath", true) || "").trim();
 		let tokens = this.getConfiguredTokens();
 		return {
 			apiBaseURL,
@@ -583,6 +608,7 @@ var CodexMarkdownAttachBridge = {
 			dailyFileLimit,
 			priorityPageLimit,
 			titlePrefix,
+			kbRootPath,
 			tokens
 		};
 	},
@@ -737,6 +763,112 @@ var CodexMarkdownAttachBridge = {
 			if (tags.some((t) => t.tag === "#MinerU-Parse")) return true;
 		}
 		return false;
+	},
+
+	collectMarkdownAttachments(selectedItems) {
+		let results = [];
+		let seenIDs = new Set();
+		let addMD = (attachment, parentItem) => {
+			if (!attachment || seenIDs.has(attachment.id)) return;
+			if (!attachment.isAttachment?.()) return;
+			let tags = attachment.getTags?.() || [];
+			if (!tags.some((t) => t.tag === "#MinerU-Parse")) return;
+			let filePath = "";
+			try { filePath = attachment.getFilePath?.() || ""; } catch (_e) {}
+			if (!filePath) return;
+			seenIDs.add(attachment.id);
+			let title = parentItem?.getField?.("title") || attachment.getField("title") || this.fileNameFromPath(filePath);
+			results.push({ attachment, parentItem, filePath, title });
+		};
+		for (let item of selectedItems || []) {
+			if (item?.isAttachment?.()) {
+				let parentItem = item.parentItemID ? Zotero.Items.get(item.parentItemID) : null;
+				addMD(item, parentItem);
+				continue;
+			}
+			if (!item?.isRegularItem?.()) continue;
+			for (let attachmentID of item.getAttachments()) {
+				addMD(Zotero.Items.get(attachmentID), item);
+			}
+		}
+		return results;
+	},
+
+	canExportToKB(items) {
+		if (!Array.isArray(items) || !items.length) return false;
+		return this.collectMarkdownAttachments(items).length > 0;
+	},
+
+	sanitizeKBFolderName(name) {
+		return String(name || "untitled").replace(/[\\/:*?"<>|]+/g, "_").replace(/\s+/g, " ").trim().slice(0, 160) || "untitled";
+	},
+
+	async exportToKnowledgeBase({ window = null, selectedItems = null } = {}) {
+		let settings = this.getSettings();
+		let kbRootPath = settings.kbRootPath;
+		if (!kbRootPath) {
+			this.showAlert(window, "sly's zotero", "请先在设置中配置知识库路径。");
+			return { success: false, error: "kbRootPath not configured" };
+		}
+		if (!await IOUtils.exists(kbRootPath)) {
+			this.showAlert(window, "sly's zotero", `知识库路径不存在: ${kbRootPath}`);
+			return { success: false, error: "kbRootPath does not exist" };
+		}
+		let items = selectedItems || window?.ZoteroPane?.getSelectedItems?.() || [];
+		let mdAttachments = this.collectMarkdownAttachments(items);
+		if (!mdAttachments.length) {
+			this.showAlert(window, "sly's zotero", "当前选中条目没有 MinerU Markdown 附件。");
+			return { success: false, error: "no markdown attachments" };
+		}
+		let progress = new Zotero.ProgressWindow({ closeOnClick: true });
+		progress.changeHeadline("导出到知识库");
+		progress.show();
+		let successes = 0;
+		let failures = [];
+		for (let entry of mdAttachments) {
+			let title = entry.title;
+			let itemProgress = new progress.ItemProgress("chrome://zotero/skin/treeitem-attachment-file.png", title);
+			let update = ({ text = "", percent = null } = {}) => {
+				if (typeof itemProgress.setText === "function") itemProgress.setText(text ? `${title} (${text})` : title);
+				if (Number.isFinite(percent)) itemProgress.setProgress(percent);
+			};
+			try {
+				let sourceDir = PathUtils.parent(entry.filePath);
+				let folderName = this.sanitizeKBFolderName(title);
+				let targetDir = PathUtils.join(kbRootPath, folderName);
+				let counter = 1;
+				while (await IOUtils.exists(targetDir)) {
+					targetDir = PathUtils.join(kbRootPath, `${folderName} (${counter})`);
+					counter++;
+				}
+				await IOUtils.makeDirectory(targetDir, { createAncestors: true });
+				update({ text: "复制文件", percent: 30 });
+				let copied = 0;
+				let children = await IOUtils.getChildren(sourceDir);
+				for (let childPath of children) {
+					let leafName = PathUtils.filename(childPath);
+					let targetPath = PathUtils.join(targetDir, leafName);
+					let stat = await IOUtils.stat(childPath);
+					if (stat.type === "directory" || stat.isDir === true) {
+						await IOUtils.copy(childPath, targetPath, { recursive: true });
+					}
+					else {
+						await IOUtils.copy(childPath, targetPath);
+					}
+					copied++;
+				}
+				successes++;
+				update({ text: `完成 (${copied} 文件)`, percent: 100 });
+			}
+			catch (e) {
+				failures.push({ title, error: String(e?.message || e) });
+				update({ text: "失败", percent: 100 });
+			}
+		}
+		progress.addDescription(`完成 ${successes}/${mdAttachments.length}`);
+		progress.startCloseTimer(5000);
+		if (failures.length) this.showAlert(window, "导出部分失败", failures.slice(0, 10).map((f) => `${f.title}: ${f.error}`).join("\n"));
+		return { success: failures.length === 0, total: mdAttachments.length, successes, failures };
 	},
 
 	collectPDFTasks(selectedItems, { replaceExisting = false } = {}) {

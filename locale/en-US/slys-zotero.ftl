@@ -6,3 +6,5 @@ slys-zotero-parse-selected =
     .label = Batch Parse with MinerU to Markdown Attachments
 slys-zotero-reparse-selected =
     .label = Re-parse and Replace Existing MinerU Markdown
+slys-zotero-export-kb =
+    .label = Export to Knowledge Base
