@@ -243,7 +243,7 @@ var CodexMarkdownAttachBridge = {
 		},
 		{
 			name: "export_to_knowledge_base",
-			description: "Export Markdown attachments from specified Zotero items to the configured knowledge base directory. Normalizes folder/file names to itemKey and renames images to pictureN.",
+			description: "Export Markdown attachments from specified Zotero items to a knowledge base directory. Normalizes folder/file names to itemKey and renames images to pictureN.",
 			inputSchema: {
 				type: "object",
 				properties: {
@@ -251,18 +251,13 @@ var CodexMarkdownAttachBridge = {
 						type: "array",
 						items: { type: "string" },
 						description: "Zotero item keys (regular items with .md attachments, or .md attachment items themselves)."
+					},
+					kbRootPath: {
+						type: "string",
+						description: "Optional target directory for the knowledge base. Defaults to the configured setting."
 					}
 				},
 				required: ["itemKeys"],
-				additionalProperties: false
-			}
-		},
-		{
-			name: "export_selected_to_knowledge_base",
-			description: "Export Markdown attachments from currently selected Zotero items to the configured knowledge base directory.",
-			inputSchema: {
-				type: "object",
-				properties: {},
 				additionalProperties: false
 			}
 		}
@@ -362,12 +357,7 @@ var CodexMarkdownAttachBridge = {
 		}
 		if (name === "export_to_knowledge_base") {
 			let items = this.resolveItemsByKeys(args.itemKeys || []);
-			return this.mcpToolText(await this.exportToKnowledgeBase({ selectedItems: items }));
-		}
-		if (name === "export_selected_to_knowledge_base") {
-			let window = Zotero.getMainWindows?.()?.[0] || null;
-			let selectedItems = window?.ZoteroPane?.getSelectedItems?.() || [];
-			return this.mcpToolText(await this.exportToKnowledgeBase({ window, selectedItems }));
+			return this.mcpToolText(await this.exportToKnowledgeBase({ selectedItems: items, overrideKbRootPath: args.kbRootPath }));
 		}
 		throw new Error(`Unknown tool: ${name}`);
 	},
@@ -836,9 +826,9 @@ var CodexMarkdownAttachBridge = {
 		return String(name || "untitled").replace(/[\\/:*?"<>|]+/g, "_").replace(/\s+/g, " ").trim().slice(0, 80) || "untitled";
 	},
 
-	async exportToKnowledgeBase({ window = null, selectedItems = null } = {}) {
+	async exportToKnowledgeBase({ window = null, selectedItems = null, overrideKbRootPath = null } = {}) {
 		let settings = this.getSettings();
-		let kbRootPath = settings.kbRootPath;
+		let kbRootPath = overrideKbRootPath ? String(overrideKbRootPath).trim() : settings.kbRootPath;
 		if (!kbRootPath) {
 			this.showAlert(window, "sly's zotero", "请先在设置中配置知识库路径。");
 			return { success: false, error: "kbRootPath not configured" };
