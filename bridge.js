@@ -223,26 +223,51 @@ var CodexMarkdownAttachBridge = {
 					additionalProperties: false
 				}
 			},
-			{
-				name: "attach_markdown_for_pdf",
-				description: "Attach a Markdown file to the parent item of a Zotero PDF attachment.",
-				inputSchema: {
-					type: "object",
-					properties: {
-						pdfAttachmentKey: { type: "string", description: "Zotero PDF attachment item key." },
-						mdPath: { type: "string", description: "Optional absolute local path to the .md or .markdown file." },
-						mode: { type: "string", enum: ["import", "link"], default: "import" },
-						title: { type: "string", description: "Optional Zotero attachment title." },
-						assetMode: { type: "string", enum: ["none", "folder"], default: "folder" },
-						assetRoot: { type: "string", description: "Optional asset root folder. Defaults to the Markdown file's parent folder." },
-						replaceExisting: { type: "boolean", default: false }
-					},
-					required: ["pdfAttachmentKey"],
-					additionalProperties: false
-				}
+		{
+			name: "attach_markdown_for_pdf",
+			description: "Attach a Markdown file to the parent item of a Zotero PDF attachment.",
+			inputSchema: {
+				type: "object",
+				properties: {
+					pdfAttachmentKey: { type: "string", description: "Zotero PDF attachment item key." },
+					mdPath: { type: "string", description: "Optional absolute local path to the .md or .markdown file." },
+					mode: { type: "string", enum: ["import", "link"], default: "import" },
+					title: { type: "string", description: "Optional Zotero attachment title." },
+					assetMode: { type: "string", enum: ["none", "folder"], default: "folder" },
+					assetRoot: { type: "string", description: "Optional asset root folder. Defaults to the Markdown file's parent folder." },
+					replaceExisting: { type: "boolean", default: false }
+				},
+				required: ["pdfAttachmentKey"],
+				additionalProperties: false
 			}
-		];
-	},
+		},
+		{
+			name: "export_to_knowledge_base",
+			description: "Export Markdown attachments from specified Zotero items to the configured knowledge base directory. Normalizes folder/file names to itemKey and renames images to pictureN.",
+			inputSchema: {
+				type: "object",
+				properties: {
+					itemKeys: {
+						type: "array",
+						items: { type: "string" },
+						description: "Zotero item keys (regular items with .md attachments, or .md attachment items themselves)."
+					}
+				},
+				required: ["itemKeys"],
+				additionalProperties: false
+			}
+		},
+		{
+			name: "export_selected_to_knowledge_base",
+			description: "Export Markdown attachments from currently selected Zotero items to the configured knowledge base directory.",
+			inputSchema: {
+				type: "object",
+				properties: {},
+				additionalProperties: false
+			}
+		}
+	];
+},
 
 	mcpResult(id, result) {
 		return { jsonrpc: "2.0", id, result };
@@ -334,6 +359,15 @@ var CodexMarkdownAttachBridge = {
 				assetRoot: args.assetRoot,
 				replaceExisting: !!args.replaceExisting
 			}));
+		}
+		if (name === "export_to_knowledge_base") {
+			let items = this.resolveItemsByKeys(args.itemKeys || []);
+			return this.mcpToolText(await this.exportToKnowledgeBase({ selectedItems: items }));
+		}
+		if (name === "export_selected_to_knowledge_base") {
+			let window = Zotero.getMainWindows?.()?.[0] || null;
+			let selectedItems = window?.ZoteroPane?.getSelectedItems?.() || [];
+			return this.mcpToolText(await this.exportToKnowledgeBase({ window, selectedItems }));
 		}
 		throw new Error(`Unknown tool: ${name}`);
 	},
