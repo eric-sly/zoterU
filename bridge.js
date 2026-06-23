@@ -820,6 +820,8 @@ var CodexMarkdownAttachBridge = {
 			this.showAlert(window, "sly's zotero", "当前选中条目没有 MinerU Markdown 附件。");
 			return { success: false, error: "no markdown attachments" };
 		}
+		let tempRoot = this.getPluginTempRoot();
+		let tempExportDir = PathUtils.join(tempRoot, `kb-export-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
 		let progress = new Zotero.ProgressWindow({ closeOnClick: true });
 		progress.changeHeadline("导出到知识库");
 		progress.show();
@@ -827,6 +829,7 @@ var CodexMarkdownAttachBridge = {
 		let failures = [];
 		for (let entry of mdAttachments) {
 			let title = entry.title;
+			let itemKey = entry.attachment.key;
 			let itemProgress = new progress.ItemProgress("chrome://zotero/skin/treeitem-attachment-file.png", title);
 			let update = ({ text = "", percent = null } = {}) => {
 				if (typeof itemProgress.setText === "function") itemProgress.setText(text ? `${title} (${text})` : title);
@@ -834,34 +837,59 @@ var CodexMarkdownAttachBridge = {
 			};
 			try {
 				let sourceDir = PathUtils.parent(entry.filePath);
-				let folderName = this.sanitizeKBFolderName(title);
-				let targetDir = PathUtils.join(kbRootPath, folderName);
+				let targetDir = PathUtils.join(kbRootPath, itemKey);
 				let counter = 1;
 				while (await IOUtils.exists(targetDir)) {
-					targetDir = PathUtils.join(kbRootPath, `${folderName} (${counter})`);
+					targetDir = PathUtils.join(kbRootPath, `${itemKey}-${counter}`);
 					counter++;
 				}
 				await IOUtils.makeDirectory(targetDir, { createAncestors: true });
-				update({ text: "复制文件", percent: 30 });
-				let copied = 0;
-				let mdShortName = this.sanitizeKBFolderName(title) + ".md";
+				update({ text: "复制并规范化", percent: 30 });
+
 				let children = await IOUtils.getChildren(sourceDir);
+				let imageFiles = [];
+				let mdSourcePath = null;
 				for (let childPath of children) {
 					let leafName = PathUtils.filename(childPath);
 					let stat = await IOUtils.stat(childPath);
 					if (stat.type === "directory" || stat.isDir === true) {
 						if (leafName !== "images") continue;
-						await IOUtils.copy(childPath, PathUtils.join(targetDir, leafName), { recursive: true });
-						copied++;
+						let imageChildren = await IOUtils.getChildren(childPath);
+						for (let imgPath of imageChildren) {
+							let imgStat = await IOUtils.stat(imgPath);
+							if (imgStat.type === "directory" || imgStat.isDir === true) continue;
+							let ext = this.getFileExtension(PathUtils.filename(imgPath));
+							imageFiles.push({ originalPath: imgPath, originalName: PathUtils.filename(imgPath), ext });
+						}
 					}
 					else {
 						if (!/\.m(?:ark)?d$/i.test(leafName)) continue;
-						await IOUtils.copy(childPath, PathUtils.join(targetDir, mdShortName));
-						copied++;
+						mdSourcePath = childPath;
 					}
 				}
+				if (!mdSourcePath) throw new Error("源目录中未找到 Markdown 文件");
+
+				let mdContent = await IOUtils.readUTF8(mdSourcePath);
+				let imageTargetDir = PathUtils.join(targetDir, "images");
+				if (imageFiles.length) {
+					await IOUtils.makeDirectory(imageTargetDir, { createAncestors: true });
+				}
+				imageFiles.sort((a, b) => a.originalName.localeCompare(b.originalName, undefined, { numeric: true }));
+				for (let i = 0; i < imageFiles.length; i++) {
+					let img = imageFiles[i];
+					let newBaseName = `picture${i + 1}`;
+					let newName = `${newBaseName}${img.ext}`;
+					let targetPath = PathUtils.join(imageTargetDir, newName);
+					await IOUtils.copy(img.originalPath, targetPath);
+					let escapedOriginal = img.originalName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+					mdContent = mdContent.replace(new RegExp(escapedOriginal, "g"), newName);
+					imageFiles[i].newName = newName;
+				}
+				let targetMDPath = PathUtils.join(targetDir, `${itemKey}.md`);
+				await IOUtils.writeUTF8(targetMDPath, mdContent);
+				let totalFiles = imageFiles.length + 1;
 				successes++;
-				update({ text: `完成 (${copied} 文件)`, percent: 100 });
+				update({ text: `完成 (${totalFiles} 文件)`, percent: 100 });
 			}
 			catch (e) {
 				failures.push({ title, error: String(e?.message || e) });
@@ -871,7 +899,13 @@ var CodexMarkdownAttachBridge = {
 		progress.addDescription(`完成 ${successes}/${mdAttachments.length}`);
 		progress.startCloseTimer(5000);
 		if (failures.length) this.showAlert(window, "导出部分失败", failures.slice(0, 10).map((f) => `${f.title}: ${f.error}`).join("\n"));
+		try { await IOUtils.remove(tempExportDir, { recursive: true }); } catch (_e) {}
 		return { success: failures.length === 0, total: mdAttachments.length, successes, failures };
+	},
+
+	getFileExtension(fileName) {
+		let parts = String(fileName || "").split(".");
+		return parts.length > 1 ? "." + parts.pop().toLowerCase() : "";
 	},
 
 	collectPDFTasks(selectedItems, { replaceExisting = false } = {}) {
