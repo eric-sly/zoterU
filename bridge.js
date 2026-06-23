@@ -847,15 +847,17 @@ var CodexMarkdownAttachBridge = {
 				let children = await IOUtils.getChildren(sourceDir);
 				for (let childPath of children) {
 					let leafName = PathUtils.filename(childPath);
-					let targetPath = PathUtils.join(targetDir, leafName);
 					let stat = await IOUtils.stat(childPath);
 					if (stat.type === "directory" || stat.isDir === true) {
-						await IOUtils.copy(childPath, targetPath, { recursive: true });
+						if (leafName !== "images") continue;
+						await IOUtils.copy(childPath, PathUtils.join(targetDir, leafName), { recursive: true });
+						copied++;
 					}
 					else {
-						await IOUtils.copy(childPath, targetPath);
+						if (!/\.m(?:ark)?d$/i.test(leafName)) continue;
+						await IOUtils.copy(childPath, PathUtils.join(targetDir, leafName));
+						copied++;
 					}
-					copied++;
 				}
 				successes++;
 				update({ text: `完成 (${copied} 文件)`, percent: 100 });
