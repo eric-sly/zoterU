@@ -882,7 +882,8 @@ var CodexMarkdownAttachBridge = {
 					let targetPath = PathUtils.join(imageTargetDir, newName);
 					await IOUtils.copy(img.originalPath, targetPath);
 					let escapedOriginal = img.originalName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-					mdContent = mdContent.replace(new RegExp(escapedOriginal, "g"), newName);
+					let imgRefRegex = new RegExp(`(\\!\\[[^\\]]*\\]\\([^)]*?images/)${escapedOriginal}(\\))`, "g");
+					mdContent = mdContent.replace(imgRefRegex, `$1${newName}$2`);
 					imageFiles[i].newName = newName;
 				}
 				let targetMDPath = PathUtils.join(targetDir, `${itemKey}.md`);
