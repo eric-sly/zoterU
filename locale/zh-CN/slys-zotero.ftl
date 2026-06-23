@@ -6,3 +6,5 @@ slys-zotero-parse-selected =
     .label = 使用 MinerU 批量解析为带图 Markdown 附件
 slys-zotero-reparse-selected =
     .label = 重新解析并替换已有 MinerU Markdown 附件
+slys-zotero-export-kb =
+    .label = 导出到知识库

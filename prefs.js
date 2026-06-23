@@ -7,3 +7,4 @@ pref("extensions.codex-md-attach-bridge.mineruDailyFileLimit", 5000);
 pref("extensions.codex-md-attach-bridge.mineruPriorityPageLimit", 1000);
 pref("extensions.codex-md-attach-bridge.mineruTokens", "");
 pref("extensions.codex-md-attach-bridge.mineruUsageJSON", "{}");
+pref("extensions.codex-md-attach-bridge.kbRootPath", "");
