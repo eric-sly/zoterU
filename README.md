@@ -214,7 +214,7 @@ Invoke-RestMethod http://127.0.0.1:23122/ping
 {
   "ok": true,
   "service": "sly's zotero",
-  "version": "1.1.1",
+  "version": "1.3.4",
   "port": 23122
 }
 ```
@@ -239,14 +239,13 @@ Invoke-RestMethod http://127.0.0.1:23122/ping
 
 ### MCP 工具
 
-支持工具：
+支持工具（共 5 个）：
 
 - `ping_bridge`
 - `get_mineru_token_usage`
 - `parse_items_with_mineru`
-- `parse_selected_pdfs_with_mineru`
 - `attach_markdown_to_item`
-- `attach_markdown_for_pdf`
+- `export_to_knowledge_base`
 
 #### `get_mineru_token_usage`
 
@@ -292,28 +291,9 @@ Invoke-RestMethod http://127.0.0.1:23122/ping
 - `replaceExisting: true` 会删除匹配的旧 `#MinerU-Parse` Markdown 附件。
 - Token 额度在上传成功后才扣减（1.1 版修复）。
 
-#### `parse_selected_pdfs_with_mineru`
-
-解析 Zotero 当前选中条目。
-
-```json
-{
-  "jsonrpc": "2.0",
-  "id": 4,
-  "method": "tools/call",
-  "params": {
-    "name": "parse_selected_pdfs_with_mineru",
-    "arguments": {
-      "replaceExisting": true,
-      "allowQueuedToken": true
-    }
-  }
-}
-```
-
 #### `attach_markdown_to_item`
 
-把本地 Markdown 附件导入指定 Zotero 父条目。
+把本地 Markdown 附件导入指定 Zotero 父条目。固定使用 import 模式，自动复制同级 images/ 目录。
 
 ```json
 {
@@ -325,37 +305,37 @@ Invoke-RestMethod http://127.0.0.1:23122/ping
     "arguments": {
       "itemKey": "SV8Y3D4K",
       "mdPath": "F:\\\\path\\\\to\\\\full.md",
-      "mode": "import",
-      "assetMode": "folder",
       "replaceExisting": false
     }
   }
 }
 ```
 
-`assetMode: "folder"` 会复制 Markdown 同级目录下的图片和资源文件夹到 Zotero storage。
+可选参数：`title`（附件标题）、`assetRoot`（资源根目录，默认取 md 文件所在目录）。
 
-#### `attach_markdown_for_pdf`
+#### `export_to_knowledge_base`
 
-通过 PDF attachment key 找父条目，再导入 Markdown。
+把指定条目的 Markdown 附件导出到知识库目录，规范化文件名方便 RAG。
 
 ```json
 {
   "jsonrpc": "2.0",
-  "id": 6,
+  "id": 7,
   "method": "tools/call",
   "params": {
-    "name": "attach_markdown_for_pdf",
+    "name": "export_to_knowledge_base",
     "arguments": {
-      "pdfAttachmentKey": "Q7FGNQAI",
-      "mdPath": "F:\\\\path\\\\to\\\\full.md",
-      "mode": "import",
-      "assetMode": "folder",
-      "replaceExisting": false
+      "itemKeys": ["8NDNIGXI", "WAET6SDD"],
+      "kbRootPath": "F:\\\\optional\\\\path"
     }
   }
 }
 ```
+
+- `itemKeys`（必填）：Zotero 条目 key 数组。
+- `kbRootPath`（可选）：目标目录，不传则用设置中配置的知识库路径。
+
+导出逻辑：文件夹名 = itemKey，md 文件名 = `<itemKey>.md`，图片重命名为 `pictureN`，md 中的图片引用同步替换，只复制 .md + images/。
 
 ## 已验证功能
 
@@ -369,13 +349,13 @@ Invoke-RestMethod http://127.0.0.1:23122/ping
 8. MCP 工具实测通过：
    - `ping_bridge`
    - `get_mineru_token_usage`
-   - `attach_markdown_to_item`
-   - `attach_markdown_for_pdf`
    - `parse_items_with_mineru`
-   - `parse_selected_pdfs_with_mineru`
+   - `attach_markdown_to_item`
+   - `export_to_knowledge_base`
 9. 默认软件打开菜单只对期刊论文、学位论文和 PDF 附件显示。
 10. 右键菜单使用官方 `Zotero.MenuManager` API，文字和图标正常显示。
 11. MCP 错误处理正常（无效 key、空参数、未知工具）。
+12. 导出到知识库功能正常，支持任意 .md 附件。
 
 ## 开发
 
