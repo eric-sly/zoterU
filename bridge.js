@@ -210,22 +210,6 @@ var CodexMarkdownAttachBridge = {
 			}
 		},
 		{
-			name: "attach_markdown_for_pdf",
-			description: "Attach a Markdown file to the parent item of a Zotero PDF attachment. Imports the file and copies its images folder.",
-			inputSchema: {
-				type: "object",
-				properties: {
-					pdfAttachmentKey: { type: "string", description: "Zotero PDF attachment item key." },
-					mdPath: { type: "string", description: "Optional absolute local path to the .md or .markdown file." },
-					title: { type: "string", description: "Optional Zotero attachment title." },
-					assetRoot: { type: "string", description: "Optional asset root folder. Defaults to the Markdown file's parent folder." },
-					replaceExisting: { type: "boolean", default: false }
-				},
-				required: ["pdfAttachmentKey"],
-				additionalProperties: false
-			}
-		},
-		{
 			name: "export_to_knowledge_base",
 			description: "Export Markdown attachments from specified Zotero items to a knowledge base directory. Normalizes folder/file names to itemKey and renames images to pictureN.",
 			inputSchema: {
@@ -311,17 +295,6 @@ var CodexMarkdownAttachBridge = {
 		if (name === "attach_markdown_to_item") {
 			return this.mcpToolText(await this.attachMarkdown({
 				itemKey: args.itemKey,
-				mdPath: args.mdPath,
-				mode: "import",
-				title: args.title,
-				assetMode: "folder",
-				assetRoot: args.assetRoot,
-				replaceExisting: !!args.replaceExisting
-			}));
-		}
-		if (name === "attach_markdown_for_pdf") {
-			return this.mcpToolText(await this.attachMarkdown({
-				pdfAttachmentKey: args.pdfAttachmentKey,
 				mdPath: args.mdPath,
 				mode: "import",
 				title: args.title,
