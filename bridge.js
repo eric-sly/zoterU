@@ -771,11 +771,10 @@ var CodexMarkdownAttachBridge = {
 		let addMD = (attachment, parentItem) => {
 			if (!attachment || seenIDs.has(attachment.id)) return;
 			if (!attachment.isAttachment?.()) return;
-			let tags = attachment.getTags?.() || [];
-			if (!tags.some((t) => t.tag === "#MinerU-Parse")) return;
 			let filePath = "";
 			try { filePath = attachment.getFilePath?.() || ""; } catch (_e) {}
 			if (!filePath) return;
+			if (!/\.m(?:ark)?d$/i.test(filePath)) return;
 			seenIDs.add(attachment.id);
 			let title = parentItem?.getField?.("title") || attachment.getField("title") || this.fileNameFromPath(filePath);
 			results.push({ attachment, parentItem, filePath, title });
