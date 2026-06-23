@@ -193,47 +193,31 @@ var CodexMarkdownAttachBridge = {
 					additionalProperties: false
 				}
 			},
-			{
-				name: "parse_selected_pdfs_with_mineru",
-				description: "Parse PDFs from the currently selected Zotero items.",
-				inputSchema: {
-					type: "object",
-					properties: {
-						replaceExisting: { type: "boolean", default: false },
-						allowQueuedToken: { type: "boolean", default: true }
-					},
-					additionalProperties: false
-				}
-			},
-			{
-				name: "attach_markdown_to_item",
-				description: "Attach a local Markdown file to a Zotero regular item by parent item key.",
-				inputSchema: {
-					type: "object",
-					properties: {
-						itemKey: { type: "string", description: "Zotero parent regular item key." },
-						mdPath: { type: "string", description: "Absolute local path to the .md or .markdown file." },
-						mode: { type: "string", enum: ["import", "link"], default: "import" },
-						title: { type: "string", description: "Optional Zotero attachment title." },
-						assetMode: { type: "string", enum: ["none", "folder"], default: "folder" },
-						assetRoot: { type: "string", description: "Optional asset root folder. Defaults to the Markdown file's parent folder." },
-						replaceExisting: { type: "boolean", default: false }
-					},
-					required: ["itemKey", "mdPath"],
-					additionalProperties: false
-				}
-			},
+		{
+			name: "attach_markdown_to_item",
+			description: "Attach a local Markdown file to a Zotero regular item by parent item key. Imports the file and copies its images folder.",
+			inputSchema: {
+				type: "object",
+				properties: {
+					itemKey: { type: "string", description: "Zotero parent regular item key." },
+					mdPath: { type: "string", description: "Absolute local path to the .md or .markdown file." },
+					title: { type: "string", description: "Optional Zotero attachment title." },
+					assetRoot: { type: "string", description: "Optional asset root folder. Defaults to the Markdown file's parent folder." },
+					replaceExisting: { type: "boolean", default: false }
+				},
+				required: ["itemKey", "mdPath"],
+				additionalProperties: false
+			}
+		},
 		{
 			name: "attach_markdown_for_pdf",
-			description: "Attach a Markdown file to the parent item of a Zotero PDF attachment.",
+			description: "Attach a Markdown file to the parent item of a Zotero PDF attachment. Imports the file and copies its images folder.",
 			inputSchema: {
 				type: "object",
 				properties: {
 					pdfAttachmentKey: { type: "string", description: "Zotero PDF attachment item key." },
 					mdPath: { type: "string", description: "Optional absolute local path to the .md or .markdown file." },
-					mode: { type: "string", enum: ["import", "link"], default: "import" },
 					title: { type: "string", description: "Optional Zotero attachment title." },
-					assetMode: { type: "string", enum: ["none", "folder"], default: "folder" },
 					assetRoot: { type: "string", description: "Optional asset root folder. Defaults to the Markdown file's parent folder." },
 					replaceExisting: { type: "boolean", default: false }
 				},
@@ -324,22 +308,13 @@ var CodexMarkdownAttachBridge = {
 		if (name === "parse_items_with_mineru") {
 			return this.mcpToolText(await this.parseMineruByKeys(args));
 		}
-		if (name === "parse_selected_pdfs_with_mineru") {
-			let window = Zotero.getMainWindows?.()?.[0] || null;
-			let selectedItems = window?.ZoteroPane?.getSelectedItems?.() || [];
-			return this.mcpToolText(await this.parseMineruTasks({
-				tasks: this.collectPDFTasks(selectedItems, { replaceExisting: !!args.replaceExisting }),
-				replaceExisting: !!args.replaceExisting,
-				allowQueuedToken: args.allowQueuedToken !== false
-			}));
-		}
 		if (name === "attach_markdown_to_item") {
 			return this.mcpToolText(await this.attachMarkdown({
 				itemKey: args.itemKey,
 				mdPath: args.mdPath,
-				mode: args.mode || "import",
+				mode: "import",
 				title: args.title,
-				assetMode: args.assetMode || "folder",
+				assetMode: "folder",
 				assetRoot: args.assetRoot,
 				replaceExisting: !!args.replaceExisting
 			}));
@@ -348,9 +323,9 @@ var CodexMarkdownAttachBridge = {
 			return this.mcpToolText(await this.attachMarkdown({
 				pdfAttachmentKey: args.pdfAttachmentKey,
 				mdPath: args.mdPath,
-				mode: args.mode || "import",
+				mode: "import",
 				title: args.title,
-				assetMode: args.assetMode || "folder",
+				assetMode: "folder",
 				assetRoot: args.assetRoot,
 				replaceExisting: !!args.replaceExisting
 			}));
