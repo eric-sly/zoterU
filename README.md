@@ -1,21 +1,22 @@
 # sly's zotero
 
-`sly's zotero` 是一个 Zotero 9+ 插件，把三类工作放在同一个本地插件里：
+`sly's zotero` 是一个 Zotero 9+ 插件，把四类工作放在同一个本地插件里：
 
 - 在 Zotero 右键菜单中批量调用 MinerU 解析 PDF，并把带图片资源的 Markdown 保存回原条目。
 - 给期刊论文、学位论文和 PDF 附件提供"用系统默认软件打开文件"的右键入口。
+- 把 Markdown 附件导出到知识库目录，自动规范化文件名和图片引用，方便构建 RAG 知识库。
 - 在本机暴露 MCP-compatible HTTP JSON-RPC 接口，供 agent 调用同一套 Zotero/MinerU 能力。
 
 当前稳定包：
 
 ```text
-F:\LLM\codex workspace\slys-zotero-1.1.1.xpi
+F:\LLM\opencode workspace\slys-zotero-1.3.0.xpi
 ```
 
 ## 安装
 
 1. Zotero -> 工具 -> 插件。
-2. 从文件安装 `slys-zotero-1.1.1.xpi`。
+2. 从文件安装 `slys-zotero-1.3.0.xpi`。
 3. 完全退出并重启 Zotero。
 4. 确认 Zotero 设置里出现 `sly's zotero`。
 
@@ -89,6 +90,40 @@ MinerU
 
 网页条目、快照、书籍等不会显示该菜单项。
 
+### 导出到知识库
+
+在设置中配置"知识库路径"后，选中含 Markdown 附件的条目，右键：
+
+```text
+导出到知识库
+```
+
+功能：
+
+- 支持任意 `.md` / `.markdown` 附件（不限于 MinerU 解析结果）。
+- 在知识库路径下以附件 `itemKey` 命名创建文件夹。
+- 只复制 `.md` 文件和 `images/` 目录，跳过 JSON、PDF 等。
+- 图片按自然排序重命名为 `picture1.jpg`、`picture2.png`…，同步更新 md 中的图片引用。
+- md 文件重命名为 `<itemKey>.md`。
+- 无图片时只导出 md 文件，不创建 `images/` 目录。
+
+输出结构：
+
+```text
+<知识库路径>/
+├── 8NDNIGXI/
+│   ├── 8NDNIGXI.md
+│   └── images/
+│       ├── picture1.jpg
+│       ├── picture2.png
+│       └── picture3.jpg
+├── WAET6SDD/
+│   ├── WAET6SDD.md
+│   └── images/
+│       ├── picture1.jpg
+│       └── picture2.png
+```
+
 ## 设置
 
 Zotero 设置 -> `sly's zotero`。
@@ -103,6 +138,7 @@ Zotero 设置 -> `sly's zotero`。
 - `每 token 每日文件上限`：默认 `5000`
 - `每 token 优先解析页数上限`：默认 `1000`
 - `MinerU Tokens`：一个输入框一个 token，可添加/删除
+- `知识库路径`：导出 Markdown 附件的目标目录
 
 Token 会保存为 JSON 数组到 Zotero prefs：
 
