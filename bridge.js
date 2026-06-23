@@ -800,7 +800,7 @@ var CodexMarkdownAttachBridge = {
 	},
 
 	sanitizeKBFolderName(name) {
-		return String(name || "untitled").replace(/[\\/:*?"<>|]+/g, "_").replace(/\s+/g, " ").trim().slice(0, 160) || "untitled";
+		return String(name || "untitled").replace(/[\\/:*?"<>|]+/g, "_").replace(/\s+/g, " ").trim().slice(0, 80) || "untitled";
 	},
 
 	async exportToKnowledgeBase({ window = null, selectedItems = null } = {}) {
@@ -844,6 +844,7 @@ var CodexMarkdownAttachBridge = {
 				await IOUtils.makeDirectory(targetDir, { createAncestors: true });
 				update({ text: "复制文件", percent: 30 });
 				let copied = 0;
+				let mdShortName = this.sanitizeKBFolderName(title) + ".md";
 				let children = await IOUtils.getChildren(sourceDir);
 				for (let childPath of children) {
 					let leafName = PathUtils.filename(childPath);
@@ -855,7 +856,7 @@ var CodexMarkdownAttachBridge = {
 					}
 					else {
 						if (!/\.m(?:ark)?d$/i.test(leafName)) continue;
-						await IOUtils.copy(childPath, PathUtils.join(targetDir, leafName));
+						await IOUtils.copy(childPath, PathUtils.join(targetDir, mdShortName));
 						copied++;
 					}
 				}
