@@ -1,4 +1,4 @@
-# Zotero MinerU
+# zoterU
 
 [English](#english) | [简体中文](#简体中文)
 
@@ -18,14 +18,14 @@ A Zotero 9+ plugin that integrates [MinerU](https://mineru.net) PDF parsing into
 
 ### Install
 
-1. Download `zotero-mineru-1.4.0.xpi` from [Releases](https://github.com/eric-sly/zotero-mineru/releases)
+1. Download `zoterU-1.4.1.xpi` from [Releases](https://github.com/eric-sly/zoterU/releases)
 2. Zotero → Tools → Add-ons → ⚙️ → Install Add-on From File
 3. Restart Zotero
-4. Confirm `Zotero MinerU` appears in Zotero preferences
+4. Confirm `zoterU` appears in Zotero preferences
 
 ### Setup
 
-Zotero → Edit → Settings → `Zotero MinerU`:
+Zotero -> Edit -> Settings -> `zoterU`:
 
 | Setting | Default | Notes |
 |---------|---------|-------|
@@ -141,7 +141,7 @@ node --check bootstrap.js
 node --check preferences.js
 
 # Package XPI
-powershell Compress-Archive -Path bootstrap.js,bridge.js,manifest.json,preferences.xhtml,preferences.js,preferences.css,prefs.js,icon.svg,locale -DestinationPath zotero-mineru-1.4.0.xpi -Force
+powershell Compress-Archive -Path bootstrap.js,bridge.js,manifest.json,preferences.xhtml,preferences.js,preferences.css,prefs.js,icon.svg,locale -DestinationPath zoterU-1.4.1.xpi -Force
 ```
 
 ### License
@@ -164,14 +164,14 @@ MIT — see [LICENSE](LICENSE).
 
 ### 安装
 
-1. 从 [Releases](https://github.com/eric-sly/zotero-mineru/releases) 下载 `zotero-mineru-1.4.0.xpi`
+1. 从 [Releases](https://github.com/eric-sly/zoterU/releases) 下载 `zoterU-1.4.1.xpi`
 2. Zotero → 工具 → 插件 → ⚙️ → 从文件安装
 3. 重启 Zotero
-4. 确认设置中显示 `Zotero MinerU`
+4. 确认设置中显示 `zoterU`
 
 ### 设置
 
-Zotero → 编辑 → 设置 → `Zotero MinerU`：
+Zotero -> 编辑 -> 设置 -> `zoterU`：
 
 | 设置项 | 默认值 | 说明 |
 |--------|--------|------|
@@ -207,7 +207,7 @@ Zotero → 编辑 → 设置 → `Zotero MinerU`：
 源码文件同英文部分。打包命令：
 
 ```bash
-powershell Compress-Archive -Path bootstrap.js,bridge.js,manifest.json,preferences.xhtml,preferences.js,preferences.css,prefs.js,icon.svg,locale -DestinationPath zotero-mineru-1.4.0.xpi -Force
+powershell Compress-Archive -Path bootstrap.js,bridge.js,manifest.json,preferences.xhtml,preferences.js,preferences.css,prefs.js,icon.svg,locale -DestinationPath zoterU-1.4.1.xpi -Force
 ```
 
 修改版本号：编辑 `manifest.json` 中的 `version` 字段。

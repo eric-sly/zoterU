@@ -13,7 +13,7 @@ async function startup({ id, version, rootURI }, reason) {
 	].getService(Components.interfaces.amIAddonManagerStartup);
 	var manifestURI = Services.io.newURI(rootURI + "manifest.json");
 	chromeHandle = aomStartup.registerChrome(manifestURI, [
-		["content", "zotero-mineru", rootURI],
+		["content", "zoteru", rootURI],
 	]);
 
 	Services.scriptloader.loadSubScript(rootURI + "bridge.js");
@@ -25,12 +25,12 @@ async function startup({ id, version, rootURI }, reason) {
 			src: rootURI + "preferences.xhtml",
 			scripts: [rootURI + "preferences.js"],
 			stylesheets: [rootURI + "preferences.css"],
-			label: "Zotero MinerU",
+			label: "zoterU",
 			image: rootURI + "icon.svg"
 		});
 	}
 	catch (e) {
-		Zotero.debug("Zotero MinerU: preference pane registration failed: " + e);
+		Zotero.debug("zoterU: preference pane registration failed: " + e);
 		Zotero.logError(e);
 	}
 	ZoteroMinerU.addToAllWindows();
