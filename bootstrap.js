@@ -13,41 +13,41 @@ async function startup({ id, version, rootURI }, reason) {
 	].getService(Components.interfaces.amIAddonManagerStartup);
 	var manifestURI = Services.io.newURI(rootURI + "manifest.json");
 	chromeHandle = aomStartup.registerChrome(manifestURI, [
-		["content", "codex-md-attach-bridge", rootURI],
+		["content", "zotero-mineru", rootURI],
 	]);
 
 	Services.scriptloader.loadSubScript(rootURI + "bridge.js");
-	CodexMarkdownAttachBridge.init({ id, version, rootURI });
-	CodexMarkdownAttachBridge.start();
+	ZoteroMinerU.init({ id, version, rootURI });
+	ZoteroMinerU.start();
 	try {
 		Zotero.PreferencePanes.register({
 			pluginID: id,
 			src: rootURI + "preferences.xhtml",
 			scripts: [rootURI + "preferences.js"],
 			stylesheets: [rootURI + "preferences.css"],
-			label: "sly's zotero",
+			label: "Zotero MinerU",
 			image: rootURI + "icon.svg"
 		});
 	}
 	catch (e) {
-		Zotero.debug("sly's zotero: preference pane registration failed: " + e);
+		Zotero.debug("Zotero MinerU: preference pane registration failed: " + e);
 		Zotero.logError(e);
 	}
-	CodexMarkdownAttachBridge.addToAllWindows();
+	ZoteroMinerU.addToAllWindows();
 }
 
 async function onMainWindowLoad({ window }, reason) {
-	CodexMarkdownAttachBridge?.addToWindow?.(window);
+	ZoteroMinerU?.addToWindow?.(window);
 }
 
 async function onMainWindowUnload({ window }, reason) {
-	CodexMarkdownAttachBridge?.removeFromWindow?.(window);
+	ZoteroMinerU?.removeFromWindow?.(window);
 }
 
 async function shutdown({ id, version, rootURI }, reason) {
-	CodexMarkdownAttachBridge?.removeFromAllWindows?.();
-	CodexMarkdownAttachBridge?.stop?.();
-	CodexMarkdownAttachBridge = undefined;
+	ZoteroMinerU?.removeFromAllWindows?.();
+	ZoteroMinerU?.stop?.();
+	ZoteroMinerU = undefined;
 
 	if (reason === APP_SHUTDOWN) {
 		return;
