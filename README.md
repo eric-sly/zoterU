@@ -1,467 +1,217 @@
-# sly's zotero
+# Zotero MinerU
 
-`sly's zotero` 是一个 Zotero 9+ 插件，把四类工作放在同一个本地插件里：
+[English](#english) | [简体中文](#简体中文)
 
-- 在 Zotero 右键菜单中批量调用 MinerU 解析 PDF，并把带图片资源的 Markdown 保存回原条目。
-- 给期刊论文、学位论文和 PDF 附件提供"用系统默认软件打开文件"的右键入口。
-- 把 Markdown 附件导出到知识库目录，自动规范化文件名和图片引用，方便构建 RAG 知识库。
-- 在本机暴露 MCP-compatible HTTP JSON-RPC 接口，供 agent 调用同一套 Zotero/MinerU 能力。
+---
 
-当前稳定包：
+## English
 
-```text
-F:\LLM\opencode workspace\slys-zotero-1.3.0.xpi
+A Zotero 9+ plugin that integrates [MinerU](https://mineru.net) PDF parsing into your Zotero workflow, with a built-in MCP server for AI agent automation.
+
+### What It Does
+
+- **One-click PDF parsing** — Right-click any PDF in Zotero, parse it to Markdown with images via MinerU
+- **Auto attachment** — Parsed Markdown + images are automatically attached back to the Zotero item
+- **Knowledge base export** — Export parsed Markdown to a flat directory structure, with normalized filenames for RAG pipelines
+- **MCP JSON-RPC server** — Exposes all functionality over `http://127.0.0.1:23122/mcp` so AI agents (Claude Code, etc.) can drive the workflow
+- **Multi-token management** — Configure multiple MinerU API tokens with automatic rotation and usage tracking
+
+### Install
+
+1. Download `zotero-mineru-1.4.0.xpi` from [Releases](https://github.com/eric-sly/zotero-mineru/releases)
+2. Zotero → Tools → Add-ons → ⚙️ → Install Add-on From File
+3. Restart Zotero
+4. Confirm `Zotero MinerU` appears in Zotero preferences
+
+### Setup
+
+Zotero → Edit → Settings → `Zotero MinerU`:
+
+| Setting | Default | Notes |
+|---------|---------|-------|
+| MinerU API Base URL | `https://mineru.net/api/v4` | |
+| Model Version | `pipeline` | `pipeline` or `vlm` |
+| Markdown Title Prefix | `MinerU Parse` | Prefix for attached Markdown filenames |
+| Poll Interval (s) | `3` | Status check frequency |
+| Timeout (s) | `120` | Per-file timeout |
+| Daily File Limit | `5000` | Per-token daily cap |
+| Priority Page Limit | `1000` | Per-token priority page cap |
+| MinerU Tokens | — | Add one or more API tokens |
+| Knowledge Base Path | — | Target directory for export |
+
+### Usage
+
+#### Human (Right-Click Menu)
+
+1. Select one or more items with PDF attachments in Zotero
+2. Right-click → **MinerU** → **Batch Parse with MinerU to Markdown Attachments**
+3. Progress window shows current model version and status
+4. Parsed Markdown appears as a child attachment tagged `#MinerU-Parse`
+
+To replace existing parsed results:
+- **MinerU** → **Re-parse and Replace Existing MinerU Markdown**
+
+To export to knowledge base:
+1. Configure Knowledge Base Path in settings
+2. Select items with `.md` attachments
+3. Right-click → **Export to Knowledge Base**
+
+Output structure:
 ```
-
-## 安装
-
-1. Zotero -> 工具 -> 插件。
-2. 从文件安装 `slys-zotero-1.3.0.xpi`。
-3. 完全退出并重启 Zotero。
-4. 确认 Zotero 设置里出现 `sly's zotero`。
-
-插件 ID 保持为：
-
-```text
-codex-md-attach-bridge@example.com
-```
-
-## 人类使用
-
-### MinerU 解析
-
-在 Zotero 中选中一篇或多篇带 PDF 的条目，右键：
-
-```text
-MinerU -> 使用 MinerU 批量解析为带图 Markdown 附件
-```
-
-如果条目已经有 `#MinerU-Parse` Markdown 附件，可用：
-
-```text
-MinerU -> 重新解析并替换已有 MinerU Markdown 附件
-```
-
-解析过程中进度窗口会显示当前使用的模型版本（`pipeline` 或 `vlm`），格式为：
-
-```text
-MinerU PDF 解析 [pipeline]
-论文标题 [pipeline] (上传 PDF)
-论文标题 [pipeline] (等待解析)
-论文标题 [pipeline] (完成)
-```
-
-解析完成后，插件会把结果导入 Zotero storage：
-
-```text
-Zotero Data\storage\<attachmentKey>\MinerU Parse - <title>.md
-Zotero Data\storage\<attachmentKey>\images\...
-```
-
-ZIP 中 MinerU 输出的其他文件（`layout.json`、`content_list.json`、`model.json`、`origin.pdf` 等）也会一并解压到同一目录。
-
-Markdown 附件会打标签：
-
-```text
-#MinerU-Parse
-#Codex-MD
-```
-
-父条目会打标签：
-
-```text
-#MinerU-Parsed
-```
-
-### 默认软件打开 PDF
-
-右键菜单中会出现：
-
-```text
-用系统默认软件打开文件
-MinerU
-```
-
-"用系统默认软件打开文件"只对以下单选对象显示：
-
-- `journalArticle` 期刊论文，且有本地 PDF 附件
-- `thesis` 学位论文，且有本地 PDF 附件
-- PDF 附件条目本身
-
-网页条目、快照、书籍等不会显示该菜单项。
-
-### 导出到知识库
-
-在设置中配置"知识库路径"后，选中含 Markdown 附件的条目，右键：
-
-```text
-导出到知识库
-```
-
-功能：
-
-- 支持任意 `.md` / `.markdown` 附件（不限于 MinerU 解析结果）。
-- 在知识库路径下以附件 `itemKey` 命名创建文件夹。
-- 只复制 `.md` 文件和 `images/` 目录，跳过 JSON、PDF 等。
-- 图片按自然排序重命名为 `picture1.jpg`、`picture2.png`…，同步更新 md 中的图片引用。
-- md 文件重命名为 `<itemKey>.md`。
-- 无图片时只导出 md 文件，不创建 `images/` 目录。
-
-输出结构：
-
-```text
-<知识库路径>/
-├── 8NDNIGXI/
-│   ├── 8NDNIGXI.md
-│   └── images/
-│       ├── picture1.jpg
-│       ├── picture2.png
-│       └── picture3.jpg
-├── WAET6SDD/
-│   ├── WAET6SDD.md
+<kb-path>/
+├── <itemKey>/
+│   ├── <itemKey>.md
 │   └── images/
 │       ├── picture1.jpg
 │       └── picture2.png
 ```
 
-## 设置
+#### AI Agent (MCP)
 
-Zotero 设置 -> `sly's zotero`。
+The plugin starts an HTTP JSON-RPC 2.0 server on `http://127.0.0.1:23122`.
 
-主要设置：
-
-- `MinerU API Base URL`：默认 `https://mineru.net/api/v4`
-- `模型版本`：`pipeline` 或 `vlm`
-- `Markdown 附件标题前缀`：默认 `MinerU Parse`
-- `轮询间隔(秒)`：默认 `3`
-- `单文件超时(秒)`：默认 `120`
-- `每 token 每日文件上限`：默认 `5000`
-- `每 token 优先解析页数上限`：默认 `1000`
-- `MinerU Tokens`：一个输入框一个 token，可添加/删除
-- `知识库路径`：导出 Markdown 附件的目标目录
-
-Token 会保存为 JSON 数组到 Zotero prefs：
-
-```text
-extensions.codex-md-attach-bridge.mineruTokens
+```bash
+# Check if running
+curl http://127.0.0.1:23122/ping
 ```
 
-用量统计保存到：
+**Available tools:**
 
-```text
-extensions.codex-md-attach-bridge.mineruUsageJSON
-```
+| Tool | Description |
+|------|-------------|
+| `ping_bridge` | Check if the plugin is running |
+| `get_mineru_token_usage` | Get daily token usage stats (tokens masked) |
+| `parse_items_with_mineru` | Parse PDFs by Zotero item keys |
+| `attach_markdown_to_item` | Import a local `.md` file as a Zotero attachment |
+| `export_to_knowledge_base` | Export Markdown attachments to knowledge base |
 
-用量口径：
-
-- `files`：今日解析文件数
-- `pages`：今日估算解析页数
-- `priorityPages`：今日已使用优先解析页数
-- `priorityRemainingPages`：今日剩余优先解析页数
-- `dailyRemaining`：今日剩余文件数
-
-## 暂存缓存
-
-MinerU zip 和解压结果会暂存到 Zotero 数据目录下：
-
-```text
-<Zotero data directory>\slys-zotero-tmp\mineru-<timestamp>-<random>\
-```
-
-正常解析完成后插件会尝试删除本次暂存目录。设置页也提供：
-
-```text
-清理暂存缓存
-```
-
-该按钮只清理：
-
-```text
-<Zotero data directory>\slys-zotero-tmp\mineru-*
-```
-
-不会碰 Zotero storage、PDF 附件或 Markdown 附件。
-
-## Agent 使用
-
-插件启动后会在本机监听：
-
-```text
-http://127.0.0.1:23122
-```
-
-可用端点：
-
-```text
-GET  /ping
-GET  /mcp
-POST /mcp
-POST /attach-md
-POST /parse-mineru
-```
-
-推荐 agent 使用 `/mcp`。
-
-### Ping
-
-```powershell
-Invoke-RestMethod http://127.0.0.1:23122/ping
-```
-
-预期：
-
-```json
-{
-  "ok": true,
-  "service": "sly's zotero",
-  "version": "1.3.4",
-  "port": 23122
-}
-```
-
-### MCP 初始化
+**Example: Parse items via MCP**
 
 ```json
 {
   "jsonrpc": "2.0",
   "id": 1,
-  "method": "initialize",
-  "params": {
-    "protocolVersion": "2024-11-05",
-    "capabilities": {},
-    "clientInfo": {
-      "name": "agent",
-      "version": "1.0"
-    }
-  }
-}
-```
-
-### MCP 工具
-
-支持工具（共 5 个）：
-
-- `ping_bridge`
-- `get_mineru_token_usage`
-- `parse_items_with_mineru`
-- `attach_markdown_to_item`
-- `export_to_knowledge_base`
-
-#### `get_mineru_token_usage`
-
-读取 token 用量，不暴露完整 token。
-
-```json
-{
-  "jsonrpc": "2.0",
-  "id": 2,
-  "method": "tools/call",
-  "params": {
-    "name": "get_mineru_token_usage",
-    "arguments": {}
-  }
-}
-```
-
-#### `parse_items_with_mineru`
-
-按 Zotero item key 解析指定条目或 PDF 附件。
-
-```json
-{
-  "jsonrpc": "2.0",
-  "id": 3,
   "method": "tools/call",
   "params": {
     "name": "parse_items_with_mineru",
     "arguments": {
       "itemKeys": ["SV8Y3D4K", "T2SGRFVE"],
-      "replaceExisting": true,
+      "replaceExisting": false,
       "allowQueuedToken": true
     }
   }
 }
 ```
 
-注意：
+See the MCP section below for full API documentation.
 
-- 会真实调用 MinerU API。
-- 会上传 PDF。
-- 会消耗 token 文件数和页数额度。
-- `replaceExisting: true` 会删除匹配的旧 `#MinerU-Parse` Markdown 附件。
-- Token 额度在上传成功后才扣减（1.1 版修复）。
+### MCP API Reference
 
-#### `attach_markdown_to_item`
-
-把本地 Markdown 附件导入指定 Zotero 父条目。固定使用 import 模式，自动复制同级 images/ 目录。
-
+**Initialize:**
 ```json
-{
-  "jsonrpc": "2.0",
-  "id": 5,
-  "method": "tools/call",
-  "params": {
-    "name": "attach_markdown_to_item",
-    "arguments": {
-      "itemKey": "SV8Y3D4K",
-      "mdPath": "F:\\\\path\\\\to\\\\full.md",
-      "replaceExisting": false
-    }
-  }
-}
+{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"agent","version":"1.0"}}}
 ```
 
-可选参数：`title`（附件标题）、`assetRoot`（资源根目录，默认取 md 文件所在目录）。
-
-#### `export_to_knowledge_base`
-
-把指定条目的 Markdown 附件导出到知识库目录，规范化文件名方便 RAG。
-
+**List tools:**
 ```json
-{
-  "jsonrpc": "2.0",
-  "id": 7,
-  "method": "tools/call",
-  "params": {
-    "name": "export_to_knowledge_base",
-    "arguments": {
-      "itemKeys": ["8NDNIGXI", "WAET6SDD"],
-      "kbRootPath": "F:\\\\optional\\\\path"
-    }
-  }
-}
+{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}
 ```
 
-- `itemKeys`（必填）：Zotero 条目 key 数组。
-- `kbRootPath`（可选）：目标目录，不传则用设置中配置的知识库路径。
-
-导出逻辑：文件夹名 = itemKey，md 文件名 = `<itemKey>.md`，图片重命名为 `pictureN`，md 中的图片引用同步替换，只复制 .md + images/。
-
-## 已验证功能
-
-1. Zotero 设置页显示正常。
-2. 多 token 输入框添加/删除正常。
-3. 模型选择 `pipeline` / `vlm` 正常保存并用于 API payload `model_version`。
-4. 清理暂存缓存按钮可用。
-5. 右键批量解析成功，进度窗口全程显示模型版本。
-6. 图片资源复制到 Zotero storage 后可用。
-7. 页数计数和 token 用量统计正确。
-8. MCP 工具实测通过：
-   - `ping_bridge`
-   - `get_mineru_token_usage`
-   - `parse_items_with_mineru`
-   - `attach_markdown_to_item`
-   - `export_to_knowledge_base`
-9. 默认软件打开菜单只对期刊论文、学位论文和 PDF 附件显示。
-10. 右键菜单使用官方 `Zotero.MenuManager` API，文字和图标正常显示。
-11. MCP 错误处理正常（无效 key、空参数、未知工具）。
-12. 导出到知识库功能正常，支持任意 .md 附件。
-
-## 开发
-
-源码目录：
-
-```text
-F:\LLM\codex workspace\codex-md-attach-bridge-official
+**Call a tool:**
+```json
+{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"<tool>","arguments":{...}}}
 ```
 
-主要文件：
+All responses follow JSON-RPC 2.0 with `{jsonrpc, id, result}` or `{jsonrpc, id, error}`.
 
-- `manifest.json`：Zotero 插件 manifest（`strict_min_version: 9.0`）
-- `bootstrap.js`：插件启动、偏好页注册、窗口加载/卸载
-- `bridge.js`：HTTP/MCP 服务、右键菜单、MinerU API、附件导入、缓存清理
-- `preferences.xhtml`：设置页结构
-- `preferences.js`：设置页逻辑
-- `preferences.css`：设置页样式
-- `prefs.js`：默认偏好值
-- `icon.svg`：插件图标
-- `locale/zh-CN/slys-zotero.ftl`：中文 Fluent 本地化
-- `locale/en-US/slys-zotero.ftl`：英文 Fluent 本地化
+### Development
 
-### 语法检查
+```bash
+# Source files
+bootstrap.js    — Plugin lifecycle (startup/shutdown/window hooks)
+bridge.js       — Core logic (HTTP/MCP server, MinerU API, menus, KB export)
+preferences.*   — Settings UI (XUL + JS + CSS)
+prefs.js        — Default preference values
+locale/         — Fluent localization (zh-CN, en-US)
+manifest.json   — Zotero plugin manifest
 
-```powershell
-cd "F:\LLM\codex workspace\codex-md-attach-bridge-official"
+# Syntax check
 node --check bridge.js
 node --check bootstrap.js
 node --check preferences.js
+
+# Package XPI
+powershell Compress-Archive -Path bootstrap.js,bridge.js,manifest.json,preferences.xhtml,preferences.js,preferences.css,prefs.js,icon.svg,locale -DestinationPath zotero-mineru-1.4.0.xpi -Force
 ```
 
-### 打包
+### License
 
-```powershell
-cd "F:\LLM\codex workspace\codex-md-attach-bridge-official"
-Compress-Archive -Path * -DestinationPath "F:\LLM\codex workspace\slys-zotero-1.1.1.xpi" -Force
+MIT — see [LICENSE](LICENSE).
+
+---
+
+## 简体中文
+
+一个 Zotero 9+ 插件，将 [MinerU](https://mineru.net) PDF 解析集成到 Zotero 工作流中，内置 MCP 服务器供 AI Agent 调用。
+
+### 功能
+
+- **一键 PDF 解析** — 右键 Zotero 中的 PDF，通过 MinerU 解析为带图片的 Markdown
+- **自动挂载附件** — 解析产物（.md + images/）自动挂载到 Zotero 条目
+- **导出到知识库** — 将 Markdown 附件导出为规范化目录结构，适配 RAG 知识库
+- **MCP JSON-RPC 服务** — 监听 `http://127.0.0.1:23122/mcp`，供 Claude Code 等 AI Agent 调用
+- **多 Token 管理** — 支持配置多个 MinerU API Token，自动轮换 + 用量追踪
+
+### 安装
+
+1. 从 [Releases](https://github.com/eric-sly/zotero-mineru/releases) 下载 `zotero-mineru-1.4.0.xpi`
+2. Zotero → 工具 → 插件 → ⚙️ → 从文件安装
+3. 重启 Zotero
+4. 确认设置中显示 `Zotero MinerU`
+
+### 设置
+
+Zotero → 编辑 → 设置 → `Zotero MinerU`：
+
+| 设置项 | 默认值 | 说明 |
+|--------|--------|------|
+| MinerU API Base URL | `https://mineru.net/api/v4` | |
+| 模型版本 | `pipeline` | `pipeline` 或 `vlm` |
+| Markdown 附件标题前缀 | `MinerU Parse` | |
+| 轮询间隔(秒) | `3` | |
+| 单文件超时(秒) | `120` | |
+| 每 Token 每日文件上限 | `5000` | |
+| 每 Token 优先解析页数上限 | `1000` | |
+| MinerU Tokens | — | 可添加/删除多个 |
+| 知识库路径 | — | 导出目标目录 |
+
+### 使用
+
+#### 人工操作（右键菜单）
+
+1. 选中一个或多个带 PDF 的 Zotero 条目
+2. 右键 → **MinerU** → **使用 MinerU 批量解析为带图 Markdown 附件**
+3. 进度窗口显示当前模型和状态
+4. 解析完成后子条目出现，标签 `#MinerU-Parse`
+
+替换已有结果：**MinerU** → **重新解析并替换已有 MinerU Markdown 附件**
+
+导出到知识库：先配置知识库路径，选中含 .md 附件的条目，右键 → **导出到知识库**
+
+#### AI Agent（MCP）
+
+插件启动后在本机监听 `http://127.0.0.1:23122`，提供标准 JSON-RPC 2.0 接口。详细 API 文档见上方 English 部分的 [MCP API Reference](#mcp-api-reference)。
+
+### 开发
+
+源码文件同英文部分。打包命令：
+
+```bash
+powershell Compress-Archive -Path bootstrap.js,bridge.js,manifest.json,preferences.xhtml,preferences.js,preferences.css,prefs.js,icon.svg,locale -DestinationPath zotero-mineru-1.4.0.xpi -Force
 ```
 
-### 修改版本号
+修改版本号：编辑 `manifest.json` 中的 `version` 字段。
 
-改 `manifest.json`：
+### 许可
 
-```json
-{
-  "name": "sly's zotero",
-  "version": "1.1.1"
-}
-```
-
-打包后安装 XPI，并完全重启 Zotero。
-
-## 故障排查
-
-### MCP 不通
-
-检查 Zotero 是否已启动并启用插件：
-
-```powershell
-Invoke-RestMethod http://127.0.0.1:23122/ping
-```
-
-如果失败：
-
-- 重启 Zotero。
-- 确认插件启用。
-- 确认没有其他进程占用 `23122`。
-
-### 设置页空白
-
-完全卸载旧版插件，重启 Zotero，再安装当前 XPI。
-
-### 右键菜单文字不显示
-
-确认 `locale/` 目录在 XPI 内，重启 Zotero。菜单文字通过 Fluent 本地化系统加载。
-
-### MinerU 解析失败
-
-检查：
-
-- token 是否有效
-- API Base URL 是否为 `https://mineru.net/api/v4`
-- PDF 是否已经下载到本地
-- 是否达到每日文件数或优先页数限制
-- Zotero 错误控制台中 `sly's zotero` 相关日志
-
-### 图片不显示
-
-确认 Markdown 附件 storage 下是否有图片目录，例如：
-
-```text
-Zotero Data\storage\<attachmentKey>\images\...
-```
-
-如果 Markdown 是通过 `attach_markdown_*` 导入，确认 `assetMode` 使用的是 `folder`。
-
-## 1.1 版变更日志
-
-- 只支持 Zotero 9+（`strict_min_version: 9.0`）。
-- 右键菜单改用官方 `Zotero.MenuManager` API，消除手动 DOM 注入导致的监听器泄漏和菜单重复。
-- 菜单文字通过 Fluent 本地化系统加载（`locale/zh-CN/` 和 `locale/en-US/`）。
-- Token 额度在上传成功后才扣减（修复上传失败仍扣额度的问题）。
-- PDF 页数估算改为只读尾部 64KB，避免大文件 OOM。
-- HTTP 请求读取超时从 1 秒提升到 6 秒。
-- `Zotero.Promise.delay` 替换为标准 `setTimeout`（兼容 Zotero 8+ 移除 Bluebird）。
-- 设置页输入保存加 debounce，减少频繁写 prefs。
-- 解析进度窗口全程显示模型版本。
-- `unregisterMenu` 使用返回的注册 ID 而非 menuID 字符串。
-- 统一 `failures` 返回结构为 `{title, error}` 对象数组。
-- `getRelativePath` 改用 `PathUtils.split` 提高跨平台兼容性。
+MIT — 详见 [LICENSE](LICENSE)。
