@@ -1,14 +1,14 @@
-var CodexMarkdownAttachBridge = {
+var ZoteroMinerU = {
 	id: null,
 	version: null,
 	rootURI: null,
 	socket: null,
 	port: 23122,
-	mcpSessionId: "zotero-mineru-bridge",
+	mcpSessionId: "zotero-mineru",
 	menuRegisteredID: null,
-	ROOT_MENU_ID: "codex-mineru-bridge-menu",
-	OPEN_FILE_MENU_ID: "slys-zotero-open-file-default",
-	PREF_BRANCH: "extensions.codex-md-attach-bridge.",
+	ROOT_MENU_ID: "zotero-mineru-menu",
+	OPEN_FILE_MENU_ID: "zotero-mineru-open-file-default",
+	PREF_BRANCH: "extensions.zotero-mineru.",
 
 	init({ id, version, rootURI }) {
 		this.id = id;
@@ -17,7 +17,7 @@ var CodexMarkdownAttachBridge = {
 	},
 
 	log(message) {
-		Zotero.debug("sly's zotero: " + message);
+		Zotero.debug("Zotero MinerU: " + message);
 	},
 
 	start() {
@@ -67,7 +67,7 @@ var CodexMarkdownAttachBridge = {
 			if (request.method === "GET" && request.path === "/ping") {
 				response = this.jsonResponse(200, {
 					ok: true,
-					service: "sly's zotero",
+					service: "zotero-mineru",
 					version: this.version,
 					port: this.port
 				});
@@ -163,7 +163,7 @@ var CodexMarkdownAttachBridge = {
 		return [
 			{
 				name: "ping_bridge",
-				description: "Check whether sly's zotero is running.",
+				description: "Check whether zotero-mineru is running.",
 				inputSchema: { type: "object", properties: {}, additionalProperties: false }
 			},
 			{
@@ -284,7 +284,7 @@ var CodexMarkdownAttachBridge = {
 
 	async callMCPTool(name, args = {}) {
 		if (name === "ping_bridge") {
-			return this.mcpToolText({ ok: true, service: "sly's zotero", version: this.version, port: this.port });
+			return this.mcpToolText({ ok: true, service: "zotero-mineru", version: this.version, port: this.port });
 		}
 		if (name === "get_mineru_token_usage") {
 			return this.mcpToolText(this.getTokenUsageSummary());
@@ -353,15 +353,15 @@ var CodexMarkdownAttachBridge = {
 	getContextMenuDefinitions() {
 		return [
 			{
-				id: "codex-mineru-parse-selected",
-				l10nID: "slys-zotero-parse-selected",
+				id: "zotero-mineru-parse-selected",
+				l10nID: "zotero-mineru-parse-selected",
 				label: "使用 MinerU 批量解析为带图 Markdown 附件",
 				getTasks: (items) => this.collectPDFTasks(items),
 				run: ({ window, selectedItems }) => this.handleParseCommand({ window, selectedItems, replaceExisting: false })
 			},
 			{
-				id: "codex-mineru-reparse-selected",
-				l10nID: "slys-zotero-reparse-selected",
+				id: "zotero-mineru-reparse-selected",
+				l10nID: "zotero-mineru-reparse-selected",
 				label: "重新解析并替换已有 MinerU Markdown 附件",
 				getTasks: (items) => this.collectPDFTasks(items, { replaceExisting: true }),
 				run: ({ window, selectedItems }) => this.handleParseCommand({ window, selectedItems, replaceExisting: true })
@@ -413,13 +413,13 @@ var CodexMarkdownAttachBridge = {
 			}
 		}
 		if (!filePath) {
-			this.showAlert(window, "sly's zotero", "当前选中条目没有可打开的本地 PDF 文件。");
+			this.showAlert(window, "Zotero MinerU", "当前选中条目没有可打开的本地 PDF 文件。");
 			return;
 		}
 		try { Zotero.launchFile(filePath); }
 		catch (e) {
 			this.log(`Open file failed: ${e?.message || e}`);
-			this.showAlert(window, "sly's zotero", `打开文件失败: ${e?.message || e}`);
+			this.showAlert(window, "Zotero MinerU", `打开文件失败: ${e?.message || e}`);
 		}
 	},
 
@@ -435,7 +435,7 @@ var CodexMarkdownAttachBridge = {
 				menus: [
 					{
 						menuType: "menuitem",
-						l10nID: "slys-zotero-open-file",
+						l10nID: "zotero-mineru-open-file",
 						label: "用系统默认软件打开文件",
 						icon: iconURL,
 						onShowing: (_event, context) => {
@@ -459,7 +459,7 @@ var CodexMarkdownAttachBridge = {
 					},
 					{
 						menuType: "submenu",
-						l10nID: "slys-zotero-mineru",
+						l10nID: "zotero-mineru-mineru",
 						label: "MinerU",
 						icon: iconURL,
 						menus: menuDefinitions.map((definition) => ({
@@ -487,7 +487,7 @@ var CodexMarkdownAttachBridge = {
 					},
 					{
 						menuType: "menuitem",
-						l10nID: "slys-zotero-export-kb",
+						l10nID: "zotero-mineru-export-kb",
 						label: "导出到知识库",
 						icon: iconURL,
 						onShowing: (_event, context) => {
@@ -521,9 +521,9 @@ var CodexMarkdownAttachBridge = {
 	},
 
 	addToWindow(window) {
-		window.CodexMarkdownAttachBridge = this;
+		window.ZoteroMinerU = this;
 		try {
-			window.MozXULElement?.insertFTLIfNeeded?.("slys-zotero.ftl");
+			window.MozXULElement?.insertFTLIfNeeded?.("zotero-mineru.ftl");
 		}
 		catch (e) {
 			this.log(`Failed to load Fluent file: ${e?.message || e}`);
@@ -538,8 +538,8 @@ var CodexMarkdownAttachBridge = {
 	},
 
 	removeFromWindow(window) {
-		if (window.CodexMarkdownAttachBridge === this) {
-			try { delete window.CodexMarkdownAttachBridge; } catch (_e) {}
+		if (window.ZoteroMinerU === this) {
+			try { delete window.ZoteroMinerU; } catch (_e) {}
 		}
 	},
 
@@ -778,17 +778,17 @@ var CodexMarkdownAttachBridge = {
 		let settings = this.getSettings();
 		let kbRootPath = overrideKbRootPath ? String(overrideKbRootPath).trim() : settings.kbRootPath;
 		if (!kbRootPath) {
-			this.showAlert(window, "sly's zotero", "请先在设置中配置知识库路径。");
+			this.showAlert(window, "Zotero MinerU", "请先在设置中配置知识库路径。");
 			return { success: false, error: "kbRootPath not configured" };
 		}
 		if (!await IOUtils.exists(kbRootPath)) {
-			this.showAlert(window, "sly's zotero", `知识库路径不存在: ${kbRootPath}`);
+			this.showAlert(window, "Zotero MinerU", `知识库路径不存在: ${kbRootPath}`);
 			return { success: false, error: "kbRootPath does not exist" };
 		}
 		let items = selectedItems || window?.ZoteroPane?.getSelectedItems?.() || [];
 		let mdAttachments = this.collectMarkdownAttachments(items);
 		if (!mdAttachments.length) {
-			this.showAlert(window, "sly's zotero", "当前选中条目没有 MinerU Markdown 附件。");
+			this.showAlert(window, "Zotero MinerU", "当前选中条目没有 MinerU Markdown 附件。");
 			return { success: false, error: "no markdown attachments" };
 		}
 		let tempRoot = this.getPluginTempRoot();
@@ -1011,7 +1011,7 @@ var CodexMarkdownAttachBridge = {
 		if (!baseDir) {
 			baseDir = PathUtils.tempDir;
 		}
-		return PathUtils.join(baseDir, "slys-zotero-tmp");
+		return PathUtils.join(baseDir, "zotero-mineru-tmp");
 	},
 
 	async cleanupPluginTempRoot() {
@@ -1434,8 +1434,7 @@ var CodexMarkdownAttachBridge = {
 		};
 		let mdAttachment = mode === "link" ? await Zotero.Attachments.linkFromFile(options) : await Zotero.Attachments.importFromFile(options);
 		if (title) mdAttachment.setField("title", title);
-		mdAttachment.addTag("#Codex-MD", 0);
-		mdAttachment.addTag("#MinerU-Parse", 0);
+			mdAttachment.addTag("#MinerU-Parse", 0);
 		await mdAttachment.saveTx();
 
 		let copiedAssets = [];
