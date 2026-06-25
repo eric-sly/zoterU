@@ -1,10 +1,10 @@
-zotero-mineru-open-file =
+zoteru-open-file =
     .label = 用系统默认软件打开文件
-zotero-mineru-mineru =
+zoteru-mineru =
     .label = MinerU
-zotero-mineru-parse-selected =
+zoteru-parse-selected =
     .label = 使用 MinerU 批量解析为带图 Markdown 附件
-zotero-mineru-reparse-selected =
+zoteru-reparse-selected =
     .label = 重新解析并替换已有 MinerU Markdown 附件
-zotero-mineru-export-kb =
+zoteru-export-kb =
     .label = 导出到知识库

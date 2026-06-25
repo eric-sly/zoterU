@@ -1,9 +1,9 @@
 {
 	"manifest_version": 2,
-	"name": "Zotero MinerU",
-	"version": "1.4.0",
+	"name": "zoterU",
+	"version": "1.4.1",
 	"description": "Parse Zotero PDFs with MinerU, attach Markdown folders, and expose the workflow over local MCP.",
-	"homepage_url": "https://github.com/eric-sly/zotero-mineru",
+	"homepage_url": "https://github.com/eric-sly/zoterU",
 	"author": "eric-sly",
 	"icons": {
 		"48": "icon.svg",
@@ -11,8 +11,8 @@
 	},
 	"applications": {
 		"zotero": {
-			"id": "zotero-mineru@github.io",
-			"update_url": "https://github.com/eric-sly/zotero-mineru/releases/latest/download/update.json",
+			"id": "zoteru@github.io",
+			"update_url": "https://github.com/eric-sly/zoterU/releases/latest/download/update.json",
 			"strict_min_version": "9.0",
 			"strict_max_version": "9.*"
 		}

@@ -1,5 +1,5 @@
 var ZoteroMineruPreferences = {
-	PREF_BRANCH: "extensions.zotero-mineru.",
+	PREF_BRANCH: "extensions.zoteru.",
 	initialized: false,
 	_saveTimer: null,
 
@@ -256,7 +256,7 @@ var ZoteroMineruPreferences = {
 if (typeof window !== "undefined") {
 	window.ZoteroMineruPreferences = ZoteroMineruPreferences;
 	window.addEventListener("DOMContentLoaded", () => {
-		if (document.getElementById("zotero-mineru-prefpane")) {
+		if (document.getElementById("zoteru-prefpane")) {
 			ZoteroMineruPreferences.init();
 		}
 	}, { once: true });

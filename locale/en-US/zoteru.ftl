@@ -1,10 +1,10 @@
-zotero-mineru-open-file =
+zoteru-open-file =
     .label = Open File with System Default
-zotero-mineru-mineru =
+zoteru-mineru =
     .label = MinerU
-zotero-mineru-parse-selected =
+zoteru-parse-selected =
     .label = Batch Parse with MinerU to Markdown Attachments
-zotero-mineru-reparse-selected =
+zoteru-reparse-selected =
     .label = Re-parse and Replace Existing MinerU Markdown
-zotero-mineru-export-kb =
+zoteru-export-kb =
     .label = Export to Knowledge Base
