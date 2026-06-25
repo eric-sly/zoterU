@@ -34,7 +34,8 @@ $packageItems = @(
 	"preferences.css",
 	"prefs.js",
 	"icon.svg",
-	"locale"
+	"locale",
+	"mcp-bridge.js"
 )
 
 try {
