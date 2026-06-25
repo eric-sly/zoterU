@@ -219,6 +219,91 @@ var ZoteroMineruPreferences = {
 		}
 	},
 
+	getMcpBridge() {
+		return Zotero.getMainWindows?.()?.[0]?.ZoteroMinerU;
+	},
+
+	buildDesktopConfig(bridgePath) {
+		let config = {
+			mcpServers: {
+				zoteru: {
+					command: "node",
+					args: [bridgePath]
+				}
+			}
+		};
+		return JSON.stringify(config, null, 2);
+	},
+
+	buildCodeInstallCmd(bridgePath) {
+		return `claude mcp add zoteru -- node "${bridgePath}"`;
+	},
+
+	setMcpStatus(message, isError = false) {
+		let status = this.$("mineru-mcp-status");
+		if (!status) return;
+		status.textContent = message || "";
+		status.style.color = isError ? "#b03232" : "#1d6e36";
+	},
+
+	renderMcpBridgeInfo() {
+		let bridge = this.getMcpBridge();
+		let bridgePath = bridge?.getMcpBridgePath?.() || "";
+		let pathInput = this.$("mineru-mcp-bridge-path");
+		let desktopPre = this.$("mineru-mcp-desktop-json");
+		let codePre = this.$("mineru-mcp-code-cmd");
+		if (pathInput) pathInput.value = bridgePath || "(未生成)";
+		if (desktopPre) {
+			desktopPre.textContent = bridgePath
+				? this.buildDesktopConfig(bridgePath)
+				: "(等待插件启动后自动生成)";
+		}
+		if (codePre) {
+			codePre.textContent = bridgePath
+				? this.buildCodeInstallCmd(bridgePath)
+				: "(等待插件启动后自动生成)";
+		}
+	},
+
+	async copyText(text) {
+		if (!text) return false;
+		try {
+			await navigator.clipboard.writeText(text);
+			return true;
+		}
+		catch (_e) {
+			try {
+				Zotero.Utilities.Internal.copyTextToClipboard(text);
+				return true;
+			}
+			catch (_e2) {
+				return false;
+			}
+		}
+	},
+
+	async reinstallBridge() {
+		let bridge = this.getMcpBridge();
+		if (!bridge?.installMcpBridge) {
+			this.setMcpStatus("重新生成失败：插件主窗口对象不可用", true);
+			return;
+		}
+		this.setMcpStatus("正在重新生成...");
+		try {
+			let path = await bridge.installMcpBridge();
+			if (path) {
+				this.setMcpStatus(`已生成: ${path}`);
+			}
+			else {
+				this.setMcpStatus("生成失败：无法定位目标目录或读取源文件", true);
+			}
+			this.renderMcpBridgeInfo();
+		}
+		catch (e) {
+			this.setMcpStatus(`生成失败: ${e.message || e}`, true);
+		}
+	},
+
 	init() {
 		if (this.initialized) return;
 		try {
@@ -231,6 +316,25 @@ var ZoteroMineruPreferences = {
 					this.setStatus(`清理失败: ${e.message || e}`, true);
 				});
 			});
+			this.$("mineru-copy-bridge-path")?.addEventListener("click", async () => {
+				let ok = await this.copyText(this.$("mineru-mcp-bridge-path")?.value || "");
+				this.setMcpStatus(ok ? "已复制路径" : "复制失败", !ok);
+			});
+			this.$("mineru-copy-desktop-json")?.addEventListener("click", async () => {
+				let ok = await this.copyText(this.$("mineru-mcp-desktop-json")?.textContent || "");
+				this.setMcpStatus(ok ? "已复制 Claude Desktop 配置" : "复制失败", !ok);
+			});
+			this.$("mineru-copy-code-cmd")?.addEventListener("click", async () => {
+				let ok = await this.copyText(this.$("mineru-mcp-code-cmd")?.textContent || "");
+				this.setMcpStatus(ok ? "已复制 Claude Code 命令" : "复制失败", !ok);
+			});
+			this.$("mineru-reinstall-bridge")?.addEventListener("click", () => {
+				this.reinstallBridge().catch((e) => {
+					Zotero.logError(e);
+					this.setMcpStatus(`生成失败: ${e.message || e}`, true);
+				});
+			});
+			this.renderMcpBridgeInfo();
 			this.$("mineru-add-token-button")?.addEventListener("click", () => {
 				this.addTokenRow();
 				this.saveSettings({ silent: true });

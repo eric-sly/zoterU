@@ -58,5 +58,35 @@
 		<html:p class="mineru-help">
 			右键 Zotero 条目选择 MinerU 可批量解析 PDF 并保存为带图 Markdown 附件；agent 可通过 http://127.0.0.1:23122/mcp 调用同一套流程。
 		</html:p>
+
+		<html:div class="mineru-mcp-section">
+			<html:h3>MCP 桥接（stdio 客户端）</html:h3>
+			<html:p class="mineru-help">
+				插件已在 Zotero 数据目录生成 stdio 转发壳 zoteru-mcp-bridge.js，供 Claude Desktop / Claude Code 等只支持 stdio 的 MCP 客户端调用。下方路径与配置已自动填充，点击复制即可使用。
+			</html:p>
+
+			<html:label class="mineru-mcp-label">转发壳路径</html:label>
+			<html:div class="mineru-mcp-row">
+				<html:input id="mineru-mcp-bridge-path" type="text" readonly="readonly" />
+				<html:button id="mineru-copy-bridge-path" type="button" class="mineru-small-button">复制</html:button>
+			</html:div>
+
+			<html:label class="mineru-mcp-label">Claude Desktop 配置（写入 claude_desktop_config.json）</html:label>
+			<html:div class="mineru-mcp-row">
+				<html:pre id="mineru-mcp-desktop-json" class="mineru-mcp-block"></html:pre>
+				<html:button id="mineru-copy-desktop-json" type="button" class="mineru-small-button mineru-mcp-copy">复制</html:button>
+			</html:div>
+
+			<html:label class="mineru-mcp-label">Claude Code 安装命令</html:label>
+			<html:div class="mineru-mcp-row">
+				<html:pre id="mineru-mcp-code-cmd" class="mineru-mcp-block"></html:pre>
+				<html:button id="mineru-copy-code-cmd" type="button" class="mineru-small-button mineru-mcp-copy">复制</html:button>
+			</html:div>
+
+			<html:div class="mineru-actions">
+				<html:button id="mineru-reinstall-bridge" type="button" class="mineru-small-button">重新生成转发壳</html:button>
+				<html:span id="mineru-mcp-status"></html:span>
+			</html:div>
+		</html:div>
 	</html:div>
 </vbox>

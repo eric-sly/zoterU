@@ -24,6 +24,10 @@ var ZoteroMinerU = {
 		if (this.socket) return;
 		try {
 			this.cleanupPluginTempRoot().catch((e) => this.log(`Temp cleanup failed: ${e?.message || e}`));
+			this.installMcpBridge().catch((e) => {
+				this.log(`MCP bridge install failed: ${e?.message || e}`);
+				Zotero.logError(e);
+			});
 			let socket = Cc["@mozilla.org/network/server-socket;1"].createInstance(Ci.nsIServerSocket);
 			socket.init(this.port, true, -1);
 			socket.asyncListen({
@@ -1012,6 +1016,56 @@ var ZoteroMinerU = {
 			baseDir = PathUtils.tempDir;
 		}
 		return PathUtils.join(baseDir, "zoteru-tmp");
+	},
+
+	getMcpBridgePath() {
+		let baseDir = "";
+		try {
+			let dir = Zotero.DataDirectory?.dir;
+			if (dir) baseDir = (typeof dir === "string") ? dir : dir.path;
+		}
+		catch (_e) {}
+		if (!baseDir) {
+			try {
+				baseDir = Services.dirsvc.get("ProfD", Ci.nsIFile).path;
+			}
+			catch (_e) {}
+		}
+		if (!baseDir) return null;
+		return PathUtils.join(baseDir, "zoteru-mcp-bridge.js");
+	},
+
+	async installMcpBridge() {
+		let targetPath = this.getMcpBridgePath();
+		if (!targetPath) {
+			this.log("MCP bridge: no target directory available");
+			return null;
+		}
+		let sourceURL = this.rootURI + "mcp-bridge.js";
+		let content = "";
+		try {
+			content = Zotero.File.getContentsFromURL(sourceURL);
+		}
+		catch (e) {
+			this.log(`MCP bridge: failed to read source from ${sourceURL}: ${e?.message || e}`);
+			return null;
+		}
+		if (!content || !content.trim()) {
+			this.log("MCP bridge: source content empty");
+			return null;
+		}
+		let existing = "";
+		try {
+			existing = await IOUtils.readUTF8(targetPath);
+		}
+		catch (_e) {}
+		if (existing === content) {
+			this.log(`MCP bridge already up to date at ${targetPath}`);
+			return targetPath;
+		}
+		await IOUtils.writeUTF8(targetPath, content);
+		this.log(`MCP bridge installed at ${targetPath}`);
+		return targetPath;
 	},
 
 	async cleanupPluginTempRoot() {

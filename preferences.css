@@ -96,3 +96,58 @@
 	color: #333;
 	min-height: 36px;
 }
+
+.mineru-mcp-section {
+	margin-top: 18px;
+	padding-top: 14px;
+	border-top: 1px solid #e2e2e2;
+}
+
+.mineru-mcp-section h3 {
+	margin: 0 0 8px;
+	font-size: 14px;
+}
+
+.mineru-mcp-label {
+	display: block;
+	margin: 12px 0 4px;
+	font-size: 12px;
+	color: #555;
+}
+
+.mineru-mcp-row {
+	display: grid;
+	grid-template-columns: 1fr auto;
+	gap: 8px;
+	align-items: start;
+}
+
+.mineru-mcp-row input {
+	width: 100%;
+	box-sizing: border-box;
+	font-size: 12px;
+}
+
+.mineru-mcp-block {
+	margin: 0;
+	padding: 8px 10px;
+	background: #f7f7f8;
+	border: 1px solid #ddd;
+	border-radius: 4px;
+	white-space: pre-wrap;
+	word-break: break-all;
+	font-size: 12px;
+	color: #333;
+	max-height: 160px;
+	overflow: auto;
+}
+
+.mineru-mcp-copy {
+	align-self: start;
+}
+
+#mineru-mcp-status {
+	margin-left: 10px;
+	font-size: 12px;
+	color: #1d6e36;
+}
