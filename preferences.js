@@ -1,5 +1,5 @@
-var CodexMineruPreferences = {
-	PREF_BRANCH: "extensions.codex-md-attach-bridge.",
+var ZoteroMineruPreferences = {
+	PREF_BRANCH: "extensions.zotero-mineru.",
 	initialized: false,
 	_saveTimer: null,
 
@@ -191,7 +191,7 @@ var CodexMineruPreferences = {
 	renderUsage() {
 		let output = this.$("mineru-usage-output");
 		if (!output) return;
-		let bridge = Zotero.getMainWindows?.()?.[0]?.CodexMarkdownAttachBridge;
+		let bridge = Zotero.getMainWindows?.()?.[0]?.ZoteroMinerU;
 		if (bridge?.getTokenUsageSummary) {
 			output.textContent = JSON.stringify(bridge.getTokenUsageSummary(), null, 2);
 			return;
@@ -200,7 +200,7 @@ var CodexMineruPreferences = {
 	},
 
 	async clearCache() {
-		let bridge = Zotero.getMainWindows?.()?.[0]?.CodexMarkdownAttachBridge;
+		let bridge = Zotero.getMainWindows?.()?.[0]?.ZoteroMinerU;
 		if (!bridge?.clearPluginTempCache) {
 			this.setStatus("清理失败：插件主窗口对象不可用", true);
 			return;
@@ -254,10 +254,10 @@ var CodexMineruPreferences = {
 };
 
 if (typeof window !== "undefined") {
-	window.CodexMineruPreferences = CodexMineruPreferences;
+	window.ZoteroMineruPreferences = ZoteroMineruPreferences;
 	window.addEventListener("DOMContentLoaded", () => {
-		if (document.getElementById("codex-mineru-prefpane")) {
-			CodexMineruPreferences.init();
+		if (document.getElementById("zotero-mineru-prefpane")) {
+			ZoteroMineruPreferences.init();
 		}
 	}, { once: true });
 }
