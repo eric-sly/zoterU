@@ -1,10 +1,10 @@
-slys-zotero-open-file =
+zotero-mineru-open-file =
     .label = 用系统默认软件打开文件
-slys-zotero-mineru =
+zotero-mineru-mineru =
     .label = MinerU
-slys-zotero-parse-selected =
+zotero-mineru-parse-selected =
     .label = 使用 MinerU 批量解析为带图 Markdown 附件
-slys-zotero-reparse-selected =
+zotero-mineru-reparse-selected =
     .label = 重新解析并替换已有 MinerU Markdown 附件
-slys-zotero-export-kb =
+zotero-mineru-export-kb =
     .label = 导出到知识库

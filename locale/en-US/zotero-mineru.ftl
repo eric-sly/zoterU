@@ -1,10 +1,10 @@
-slys-zotero-open-file =
+zotero-mineru-open-file =
     .label = Open File with System Default
-slys-zotero-mineru =
+zotero-mineru-mineru =
     .label = MinerU
-slys-zotero-parse-selected =
+zotero-mineru-parse-selected =
     .label = Batch Parse with MinerU to Markdown Attachments
-slys-zotero-reparse-selected =
+zotero-mineru-reparse-selected =
     .label = Re-parse and Replace Existing MinerU Markdown
-slys-zotero-export-kb =
+zotero-mineru-export-kb =
     .label = Export to Knowledge Base
