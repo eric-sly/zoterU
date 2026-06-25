@@ -75,6 +75,30 @@ The plugin starts an HTTP JSON-RPC 2.0 server on `http://127.0.0.1:23122`.
 curl http://127.0.0.1:23122/ping
 ```
 
+#### Stdio MCP Wrapper
+
+For MCP clients that launch local stdio servers, use `mcp-bridge.js`. It forwards JSON-RPC messages from stdin/stdout to the plugin HTTP endpoint at `http://127.0.0.1:23122/mcp`.
+
+```json
+{
+  "command": "node",
+  "args": ["/path/to/zoterU/mcp-bridge.js"]
+}
+```
+
+Add this to `claude_desktop_config.json` or an equivalent Claude MCP config:
+
+```json
+{
+  "mcpServers": {
+    "zoteru": {
+      "command": "node",
+      "args": ["/path/to/zoterU/mcp-bridge.js"]
+    }
+  }
+}
+```
+
 **Available tools:**
 
 | Tool | Description |
@@ -134,6 +158,8 @@ preferences.*   — Settings UI (XUL + JS + CSS)
 prefs.js        — Default preference values
 locale/         — Fluent localization (zh-CN, en-US)
 manifest.json   — Zotero plugin manifest
+mcp-bridge.js   — stdio-to-HTTP MCP wrapper for AI agent clients
+scripts/        — Local development and packaging scripts
 
 # Syntax check
 node --check bridge.js
@@ -141,7 +167,7 @@ node --check bootstrap.js
 node --check preferences.js
 
 # Package XPI
-powershell Compress-Archive -Path bootstrap.js,bridge.js,manifest.json,preferences.xhtml,preferences.js,preferences.css,prefs.js,icon.svg,locale -DestinationPath zoterU-1.4.1.xpi -Force
+powershell -ExecutionPolicy Bypass -File scripts/build-xpi.ps1
 ```
 
 ### License
@@ -202,12 +228,36 @@ Zotero -> 编辑 -> 设置 -> `zoterU`：
 
 插件启动后在本机监听 `http://127.0.0.1:23122`，提供标准 JSON-RPC 2.0 接口。详细 API 文档见上方 English 部分的 [MCP API Reference](#mcp-api-reference)。
 
+#### Stdio MCP 壳
+
+如果 MCP 客户端需要启动本地 stdio server，使用 `mcp-bridge.js`。它会把 stdin/stdout 的 JSON-RPC 消息转发到插件 HTTP endpoint：`http://127.0.0.1:23122/mcp`。
+
+```json
+{
+  "command": "node",
+  "args": ["/path/to/zoterU/mcp-bridge.js"]
+}
+```
+
+添加到 `claude_desktop_config.json` 或等价的 Claude MCP 配置中：
+
+```json
+{
+  "mcpServers": {
+    "zoteru": {
+      "command": "node",
+      "args": ["/path/to/zoterU/mcp-bridge.js"]
+    }
+  }
+}
+```
+
 ### 开发
 
 源码文件同英文部分。打包命令：
 
 ```bash
-powershell Compress-Archive -Path bootstrap.js,bridge.js,manifest.json,preferences.xhtml,preferences.js,preferences.css,prefs.js,icon.svg,locale -DestinationPath zoterU-1.4.1.xpi -Force
+powershell -ExecutionPolicy Bypass -File scripts/build-xpi.ps1
 ```
 
 修改版本号：编辑 `manifest.json` 中的 `version` 字段。
