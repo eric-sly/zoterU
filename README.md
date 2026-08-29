@@ -6,7 +6,7 @@
 
 ## English
 
-A Zotero 9+ plugin that integrates [MinerU](https://mineru.net) PDF parsing into your Zotero workflow, with a built-in MCP server for AI agent automation.
+A Zotero 9/10 plugin that integrates [MinerU](https://mineru.net) PDF parsing into your Zotero workflow, with a built-in MCP server for AI agent automation. Compatible with both Zotero 9 and Zotero 10.
 
 ### What It Does
 
@@ -18,7 +18,7 @@ A Zotero 9+ plugin that integrates [MinerU](https://mineru.net) PDF parsing into
 
 ### Install
 
-1. Download `zoterU-1.4.1.xpi` from [Releases](https://github.com/eric-sly/zoterU/releases)
+1. Download `zoterU-1.5.0.xpi` from [Releases](https://github.com/eric-sly/zoterU/releases)
 2. Zotero → Tools → Add-ons → ⚙️ → Install Add-on From File
 3. Restart Zotero
 4. Confirm `zoterU` appears in Zotero preferences
@@ -178,7 +178,7 @@ MIT — see [LICENSE](LICENSE).
 
 ## 简体中文
 
-一个 Zotero 9+ 插件，将 [MinerU](https://mineru.net) PDF 解析集成到 Zotero 工作流中，内置 MCP 服务器供 AI Agent 调用。
+一个 Zotero 9/10 插件，将 [MinerU](https://mineru.net) PDF 解析集成到 Zotero 工作流中，内置 MCP 服务器供 AI Agent 调用。同时兼容 Zotero 9 与 Zotero 10。
 
 ### 功能
 
@@ -190,7 +190,7 @@ MIT — see [LICENSE](LICENSE).
 
 ### 安装
 
-1. 从 [Releases](https://github.com/eric-sly/zoterU/releases) 下载 `zoterU-1.4.1.xpi`
+1. 从 [Releases](https://github.com/eric-sly/zoterU/releases) 下载 `zoterU-1.5.0.xpi`
 2. Zotero → 工具 → 插件 → ⚙️ → 从文件安装
 3. 重启 Zotero
 4. 确认设置中显示 `zoterU`
