@@ -1103,8 +1103,8 @@ var ZoteroMinerU = {
 	},
 
 	resolveKBParsedBy(settings) {
-		// backend 取当前 modelVersion（pipeline/vlm）；契约示例值为 hybrid-engine，
-		// 取值口径待与服务端确认后再统一（对接方不单方面定契约字段语义）
+		// backend 取当前 modelVersion（pipeline/vlm）。已核实服务端（kb/receiver.py receive_document）
+		// 对 parsed_by 整体原样透传存档、零校验——契约示例 hybrid-engine 仅为示例，取值无需对齐
 		let provider = /mineru\.net/i.test(String(settings.apiBaseURL || "")) ? "cloud-mineru" : "lan-mineru";
 		return { provider, backend: String(settings.modelVersion || "pipeline"), at: new Date().toISOString() };
 	},
