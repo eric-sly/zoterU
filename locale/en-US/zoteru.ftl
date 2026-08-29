@@ -7,4 +7,4 @@ zoteru-parse-selected =
 zoteru-reparse-selected =
     .label = Re-parse and Replace Existing MinerU Markdown
 zoteru-export-kb =
-    .label = Export to Knowledge Base
+    .label = Push to Knowledge Base

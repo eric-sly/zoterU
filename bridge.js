@@ -9,6 +9,12 @@ var ZoteroMinerU = {
 	ROOT_MENU_ID: "zoteru-menu",
 	OPEN_FILE_MENU_ID: "zoteru-open-file-default",
 	PREF_BRANCH: "extensions.zoteru.",
+	notifierID: null,
+	KB_BODY_LIMIT_BYTES: 200 * 1024 * 1024,
+	KB_SYNC_TAG: "#KB-Synced",
+	KB_SYNC_TAG_NO_PDF: "#KB-Synced-无PDF留档",
+	_kbDeleteChain: Promise.resolve(),
+	_kbDeleteSynced: new Set(),
 
 	init({ id, version, rootURI }) {
 		this.id = id;
@@ -41,6 +47,7 @@ var ZoteroMinerU = {
 			});
 			this.socket = socket;
 			this.log(`Listening on http://127.0.0.1:${this.port}`);
+			this.registerKBDeleteSyncObserver();
 		}
 		catch (e) {
 			this.log(`Failed to start: ${e}`);
@@ -48,7 +55,34 @@ var ZoteroMinerU = {
 		}
 	},
 
+	registerKBDeleteSyncObserver() {
+		if (this.notifierID !== null) return;
+		try {
+			this.notifierID = Zotero.Notifier.registerObserver({
+				notify: (event, type, ids, extraData) => {
+					try {
+						this.handleKBNotifierEvent(event, type, ids, extraData);
+					}
+					catch (e) {
+						this.log(`KB delete sync notify failed: ${e?.message || e}`);
+					}
+				}
+			}, ["item"], "zoteru-kb-delete-sync");
+		}
+		catch (e) {
+			this.log(`KB delete sync observer registration failed: ${e?.message || e}`);
+		}
+	},
+
+	unregisterKBDeleteSyncObserver() {
+		if (this.notifierID === null) return;
+		try { Zotero.Notifier.unregisterObserver(this.notifierID); }
+		catch (e) { this.log(`KB delete sync observer unregister failed: ${e?.message || e}`); }
+		this.notifierID = null;
+	},
+
 	stop() {
+		this.unregisterKBDeleteSyncObserver();
 		if (!this.socket) return;
 		try {
 			this.socket.close();
@@ -215,7 +249,7 @@ var ZoteroMinerU = {
 		},
 		{
 			name: "export_to_knowledge_base",
-			description: "Export Markdown attachments from specified Zotero items to a knowledge base directory. Normalizes folder/file names to itemKey and renames images to pictureN.",
+			description: "Export Markdown attachments from specified Zotero items to a knowledge base. Targets: local directory (normalized folders) and/or HTTP knowledge-base service (POST /documents), per settings or the explicit target argument. Deletion of items syncs via DELETE /docs/{doc_id} automatically.",
 			inputSchema: {
 				type: "object",
 				properties: {
@@ -226,7 +260,16 @@ var ZoteroMinerU = {
 					},
 					kbRootPath: {
 						type: "string",
-						description: "Optional target directory for the knowledge base. Defaults to the configured setting."
+						description: "Optional target directory for the local knowledge base export. Defaults to the configured setting."
+					},
+					target: {
+						type: "string",
+						enum: ["local", "http", "both"],
+						description: "Optional push target override. Defaults to the configured checkboxes (local export and/or HTTP push)."
+					},
+					includePdf: {
+						type: "boolean",
+						description: "Optional override: include the source PDF in the HTTP push (source_pdf part). Defaults to the configured setting."
 					}
 				},
 				required: ["itemKeys"],
@@ -309,7 +352,12 @@ var ZoteroMinerU = {
 		}
 		if (name === "export_to_knowledge_base") {
 			let items = this.resolveItemsByKeys(args.itemKeys || []);
-			return this.mcpToolText(await this.exportToKnowledgeBase({ selectedItems: items, overrideKbRootPath: args.kbRootPath }));
+			return this.mcpToolText(await this.pushToKnowledgeBase({
+				selectedItems: items,
+				overrideKbRootPath: args.kbRootPath,
+				target: args.target,
+				includePdf: (args.includePdf === undefined || args.includePdf === null) ? null : !!args.includePdf
+			}));
 		}
 		throw new Error(`Unknown tool: ${name}`);
 	},
@@ -492,7 +540,7 @@ var ZoteroMinerU = {
 					{
 						menuType: "menuitem",
 						l10nID: "zoteru-export-kb",
-						label: "导出到知识库",
+						label: "推送到知识库",
 						icon: iconURL,
 						onShowing: (_event, context) => {
 							try {
@@ -508,8 +556,8 @@ var ZoteroMinerU = {
 						onCommand: (_event, context) => {
 							let window = context?.menuElem?.ownerGlobal || Zotero.getMainWindows?.()?.[0] || null;
 							let items = Array.isArray(context?.items) ? context.items : [];
-							this.exportToKnowledgeBase({ window, selectedItems: items }).catch((e) => {
-								this.log(`Export to KB failed: ${e?.message || e}`);
+							this.pushToKnowledgeBase({ window, selectedItems: items }).catch((e) => {
+								this.log(`Push to KB failed: ${e?.message || e}`);
 							});
 						}
 					}
@@ -575,6 +623,19 @@ var ZoteroMinerU = {
 		if (!Number.isFinite(priorityPageLimit) || priorityPageLimit <= 0) priorityPageLimit = 1000;
 		let titlePrefix = String(Zotero.Prefs.get(this.PREF_BRANCH + "mineruTitlePrefix", true) || "MinerU Parse").trim() || "MinerU Parse";
 		let kbRootPath = String(Zotero.Prefs.get(this.PREF_BRANCH + "kbRootPath", true) || "").trim();
+		let kbServiceURL = String(Zotero.Prefs.get(this.PREF_BRANCH + "kbServiceURL", true) || "").trim().replace(/\/+$/, "");
+		let kbApiToken = String(Zotero.Prefs.get(this.PREF_BRANCH + "kbApiToken", true) || "").trim();
+		let kbExportLocal = this.coercePrefBool("kbExportLocal", true);
+		let kbExportHTTP = this.coercePrefBool("kbExportHTTP", true);
+		let kbPushIncludePdf = this.coercePrefBool("kbPushIncludePdf", true);
+		let kbDeleteSyncEnabled = this.coercePrefBool("kbDeleteSyncEnabled", true);
+		let kbSyncTagEnabled = this.coercePrefBool("kbSyncTagEnabled", true);
+		let kbPushTimeoutSec = parseInt(Zotero.Prefs.get(this.PREF_BRANCH + "kbPushTimeoutSec", true), 10);
+		if (!Number.isFinite(kbPushTimeoutSec) || kbPushTimeoutSec <= 0) kbPushTimeoutSec = 120;
+		kbPushTimeoutSec = Math.min(Math.max(kbPushTimeoutSec, 10), 3600);
+		let kbPushMaxRetries = parseInt(Zotero.Prefs.get(this.PREF_BRANCH + "kbPushMaxRetries", true), 10);
+		if (!Number.isFinite(kbPushMaxRetries) || kbPushMaxRetries < 0) kbPushMaxRetries = 3;
+		kbPushMaxRetries = Math.min(kbPushMaxRetries, 10);
 		let tokens = this.getConfiguredTokens();
 		return {
 			apiBaseURL,
@@ -585,8 +646,25 @@ var ZoteroMinerU = {
 			priorityPageLimit,
 			titlePrefix,
 			kbRootPath,
+			kbServiceURL,
+			kbApiToken,
+			kbExportLocal,
+			kbExportHTTP,
+			kbPushIncludePdf,
+			kbDeleteSyncEnabled,
+			kbSyncTagEnabled,
+			kbPushTimeoutMS: kbPushTimeoutSec * 1000,
+			kbPushMaxRetries,
 			tokens
 		};
+	},
+
+	coercePrefBool(name, fallback) {
+		let value = Zotero.Prefs.get(this.PREF_BRANCH + name, true);
+		if (value === undefined || value === null || value === "") return fallback;
+		if (typeof value === "boolean") return value;
+		if (typeof value === "number") return value !== 0;
+		return !["false", "0", "no", "off"].includes(String(value).trim().toLowerCase());
 	},
 
 	getConfiguredTokens() {
@@ -778,16 +856,30 @@ var ZoteroMinerU = {
 		return String(name || "untitled").replace(/[\\/:*?"<>|]+/g, "_").replace(/\s+/g, " ").trim().slice(0, 80) || "untitled";
 	},
 
-	async exportToKnowledgeBase({ window = null, selectedItems = null, overrideKbRootPath = null } = {}) {
+	async pushToKnowledgeBase({ window = null, selectedItems = null, overrideKbRootPath = null, target = null, includePdf = null } = {}) {
 		let settings = this.getSettings();
-		let kbRootPath = overrideKbRootPath ? String(overrideKbRootPath).trim() : settings.kbRootPath;
-		if (!kbRootPath) {
-			this.showAlert(window, "zoterU", "请先在设置中配置知识库路径。");
-			return { success: false, error: "kbRootPath not configured" };
+		let targets = [];
+		if (target === "local" || target === "http" || target === "both") {
+			targets = target === "both" ? ["local", "http"] : [target];
 		}
-		if (!await IOUtils.exists(kbRootPath)) {
-			this.showAlert(window, "zoterU", `知识库路径不存在: ${kbRootPath}`);
-			return { success: false, error: "kbRootPath does not exist" };
+		else {
+			if (settings.kbExportLocal) targets.push("local");
+			if (settings.kbExportHTTP) targets.push("http");
+		}
+		let kbRootPath = overrideKbRootPath ? String(overrideKbRootPath).trim() : settings.kbRootPath;
+		let problems = [];
+		if (targets.includes("local")) {
+			if (!kbRootPath) problems.push("本地目录导出：请先在设置中配置知识库路径。");
+			else if (!await IOUtils.exists(kbRootPath)) problems.push(`本地知识库路径不存在: ${kbRootPath}`);
+		}
+		if (targets.includes("http")) {
+			if (!settings.kbServiceURL) problems.push("HTTP 推送：请先在设置中配置知识库服务 URL。");
+			else if (!settings.kbApiToken) problems.push("HTTP 推送：请先在设置中填写知识库 API Token。");
+		}
+		if (!targets.length) problems.push("未选择任何推送目标（本地目录 / HTTP 服务），请在设置中勾选。");
+		if (problems.length) {
+			this.showAlert(window, "zoterU", problems.join("\n"));
+			return { success: false, error: problems.join(" ") };
 		}
 		let items = selectedItems || window?.ZoteroPane?.getSelectedItems?.() || [];
 		let mdAttachments = this.collectMarkdownAttachments(items);
@@ -795,77 +887,61 @@ var ZoteroMinerU = {
 			this.showAlert(window, "zoterU", "当前选中条目没有 MinerU Markdown 附件。");
 			return { success: false, error: "no markdown attachments" };
 		}
-		let tempRoot = this.getPluginTempRoot();
-		let tempExportDir = PathUtils.join(tempRoot, `kb-export-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
+		let httpPushEnabled = targets.includes("http");
+		let effectiveIncludePdf = (includePdf === null || includePdf === undefined) ? settings.kbPushIncludePdf : !!includePdf;
 		let progress = new Zotero.ProgressWindow({ closeOnClick: true });
-		progress.changeHeadline("导出到知识库");
+		progress.changeHeadline("推送到知识库");
 		progress.show();
 		let successes = 0;
 		let failures = [];
+		let httpResults = [];
 		for (let entry of mdAttachments) {
 			let title = entry.title;
-			let itemKey = entry.attachment.key;
 			let itemProgress = new progress.ItemProgress("chrome://zotero/skin/treeitem-attachment-file.png", title);
 			let update = ({ text = "", percent = null } = {}) => {
 				if (typeof itemProgress.setText === "function") itemProgress.setText(text ? `${title} (${text})` : title);
 				if (Number.isFinite(percent)) itemProgress.setProgress(percent);
 			};
 			try {
-				let sourceDir = PathUtils.parent(entry.filePath);
-				let targetDir = PathUtils.join(kbRootPath, itemKey);
-				let counter = 1;
-				while (await IOUtils.exists(targetDir)) {
-					targetDir = PathUtils.join(kbRootPath, `${itemKey}-${counter}`);
-					counter++;
+				let scan = await this.scanKBSourceDir(PathUtils.parent(entry.filePath));
+				if (!scan.mdSourcePath) throw new Error("源目录中未找到 Markdown 文件");
+				update({ text: "规范化产物", percent: 20 });
+				let mdContent = await IOUtils.readUTF8(scan.mdSourcePath);
+				let normalized = this.normalizeKBImages(mdContent, scan.imageFiles);
+				let docID = entry.parentItem?.key || entry.attachment.key;
+				let entryProblems = [];
+				if (targets.includes("local")) {
+					update({ text: "导出到本地目录", percent: 40 });
+					let localResult = await this.exportEntryToLocalKB({ entry, normalized, kbRootPath });
+					if (!localResult.success) entryProblems.push(`本地: ${localResult.error || "未知错误"}`);
 				}
-				await IOUtils.makeDirectory(targetDir, { createAncestors: true });
-				update({ text: "复制并规范化", percent: 30 });
-
-				let children = await IOUtils.getChildren(sourceDir);
-				let imageFiles = [];
-				let mdSourcePath = null;
-				for (let childPath of children) {
-					let leafName = PathUtils.filename(childPath);
-					let stat = await IOUtils.stat(childPath);
-					if (stat.type === "directory" || stat.isDir === true) {
-						if (leafName !== "images") continue;
-						let imageChildren = await IOUtils.getChildren(childPath);
-						for (let imgPath of imageChildren) {
-							let imgStat = await IOUtils.stat(imgPath);
-							if (imgStat.type === "directory" || imgStat.isDir === true) continue;
-							let ext = this.getFileExtension(PathUtils.filename(imgPath));
-							imageFiles.push({ originalPath: imgPath, originalName: PathUtils.filename(imgPath), ext });
-						}
+				if (httpPushEnabled) {
+					let pushResult = await this.pushEntryToKBService({
+						entry,
+						normalized,
+						scan,
+						settings,
+						includePdf: effectiveIncludePdf,
+						onStatus: (text) => update({ text, percent: 60 })
+					});
+					httpResults.push({ docID, ...pushResult });
+					if (pushResult.ok) {
+						this._kbDeleteSynced.delete(docID);
+						await this.markKBSyncTag(entry.parentItem || entry.attachment, pushResult.pdfIncluded, settings);
+						update({ text: pushResult.pdfIncluded ? `已推送 (${pushResult.serverStatus})` : `已推送 (${pushResult.serverStatus}，无PDF留档)`, percent: 90 });
 					}
 					else {
-						if (!/\.m(?:ark)?d$/i.test(leafName)) continue;
-						mdSourcePath = childPath;
+						entryProblems.push(`HTTP: ${pushResult.error || "未知错误"}`);
 					}
 				}
-				if (!mdSourcePath) throw new Error("源目录中未找到 Markdown 文件");
-
-				let mdContent = await IOUtils.readUTF8(mdSourcePath);
-				let imageTargetDir = PathUtils.join(targetDir, "images");
-				if (imageFiles.length) {
-					await IOUtils.makeDirectory(imageTargetDir, { createAncestors: true });
+				if (entryProblems.length) {
+					failures.push({ title, error: entryProblems.join("；") });
+					update({ text: "失败", percent: 100 });
 				}
-				imageFiles.sort((a, b) => a.originalName.localeCompare(b.originalName, undefined, { numeric: true }));
-				for (let i = 0; i < imageFiles.length; i++) {
-					let img = imageFiles[i];
-					let newBaseName = `picture${i + 1}`;
-					let newName = `${newBaseName}${img.ext}`;
-					let targetPath = PathUtils.join(imageTargetDir, newName);
-					await IOUtils.copy(img.originalPath, targetPath);
-					let escapedOriginal = img.originalName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-					let imgRefRegex = new RegExp(`(\\!\\[[^\\]]*\\]\\([^)]*?images/)${escapedOriginal}(\\))`, "g");
-					mdContent = mdContent.replace(imgRefRegex, `$1${newName}$2`);
-					imageFiles[i].newName = newName;
+				else {
+					successes++;
+					update({ text: "完成", percent: 100 });
 				}
-				let targetMDPath = PathUtils.join(targetDir, `${itemKey}.md`);
-				await IOUtils.writeUTF8(targetMDPath, mdContent);
-				let totalFiles = imageFiles.length + 1;
-				successes++;
-				update({ text: `完成 (${totalFiles} 文件)`, percent: 100 });
 			}
 			catch (e) {
 				failures.push({ title, error: String(e?.message || e) });
@@ -874,9 +950,489 @@ var ZoteroMinerU = {
 		}
 		progress.addDescription(`完成 ${successes}/${mdAttachments.length}`);
 		progress.startCloseTimer(5000);
-		if (failures.length) this.showAlert(window, "导出部分失败", failures.slice(0, 10).map((f) => `${f.title}: ${f.error}`).join("\n"));
-		try { await IOUtils.remove(tempExportDir, { recursive: true }); } catch (_e) {}
-		return { success: failures.length === 0, total: mdAttachments.length, successes, failures };
+		if (failures.length) this.showAlert(window, "推送部分失败", failures.slice(0, 10).map((f) => `${f.title}: ${f.error}`).join("\n"));
+		return { success: failures.length === 0, total: mdAttachments.length, successes, failures, http: httpResults };
+	},
+
+	async scanKBSourceDir(sourceDir) {
+		let children = await IOUtils.getChildren(sourceDir);
+		let imageFiles = [];
+		let mdSourcePath = null;
+		let contentListPath = null;
+		for (let childPath of children) {
+			let leafName = PathUtils.filename(childPath);
+			let stat = await IOUtils.stat(childPath);
+			if (stat.type === "directory" || stat.isDir === true) {
+				if (leafName !== "images") continue;
+				let imageChildren = await IOUtils.getChildren(childPath);
+				for (let imgPath of imageChildren) {
+					let imgStat = await IOUtils.stat(imgPath);
+					if (imgStat.type === "directory" || imgStat.isDir === true) continue;
+					let ext = this.getFileExtension(PathUtils.filename(imgPath));
+					imageFiles.push({ originalPath: imgPath, originalName: PathUtils.filename(imgPath), ext });
+				}
+			}
+			else {
+				if (/\.m(?:ark)?d$/i.test(leafName)) {
+					mdSourcePath = childPath;
+					continue;
+				}
+				if (/^content_list.*\.json$/i.test(leafName)) contentListPath = childPath;
+			}
+		}
+		return { mdSourcePath, imageFiles, contentListPath };
+	},
+
+	// 图片统一重命名为 pictureN 并同步改写 md 中的 images/ 相对引用——本地导出与 HTTP 推送共用同一份规范化结果
+	normalizeKBImages(mdContent, imageFiles) {
+		let images = (imageFiles || []).map((img) => ({ originalPath: img.originalPath, originalName: img.originalName, ext: img.ext, name: "" }));
+		images.sort((a, b) => a.originalName.localeCompare(b.originalName, undefined, { numeric: true }));
+		let content = String(mdContent || "");
+		for (let i = 0; i < images.length; i++) {
+			let img = images[i];
+			img.name = `picture${i + 1}${img.ext}`;
+			let escapedOriginal = img.originalName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+			let imgRefRegex = new RegExp(`(\\!\\[[^\\]]*\\]\\([^)]*?images/)${escapedOriginal}(\\))`, "g");
+			content = content.replace(imgRefRegex, `$1${img.name}$2`);
+		}
+		return {
+			mdContent: content,
+			images: images.map(({ originalPath, name }) => ({ originalPath, name }))
+		};
+	},
+
+	async exportEntryToLocalKB({ entry, normalized, kbRootPath }) {
+		try {
+			let itemKey = entry.attachment.key;
+			let targetDir = PathUtils.join(kbRootPath, itemKey);
+			let counter = 1;
+			while (await IOUtils.exists(targetDir)) {
+				targetDir = PathUtils.join(kbRootPath, `${itemKey}-${counter}`);
+				counter++;
+			}
+			await IOUtils.makeDirectory(targetDir, { createAncestors: true });
+			let imageTargetDir = PathUtils.join(targetDir, "images");
+			if (normalized.images.length) {
+				await IOUtils.makeDirectory(imageTargetDir, { createAncestors: true });
+			}
+			for (let img of normalized.images) {
+				await IOUtils.copy(img.originalPath, PathUtils.join(imageTargetDir, img.name));
+			}
+			await IOUtils.writeUTF8(PathUtils.join(targetDir, `${itemKey}.md`), normalized.mdContent);
+			return { success: true, dir: targetDir, files: normalized.images.length + 1 };
+		}
+		catch (e) {
+			return { success: false, error: String(e?.message || e) };
+		}
+	},
+
+	resolveKBPdfPath(entry) {
+		let parentItem = entry.parentItem;
+		if (!parentItem?.isRegularItem?.()) return "";
+		try {
+			for (let attachmentID of parentItem.getAttachments()) {
+				let candidate = Zotero.Items.get(attachmentID);
+				if (candidate?.isPDFAttachment?.()) {
+					let path = candidate.getFilePath?.() || "";
+					if (path) return path;
+				}
+			}
+		}
+		catch (_e) {}
+		return "";
+	},
+
+	extractKBItemMeta(item) {
+		let meta = { title: "", authors: "", year: null, venue: "", doi: "", itemType: "", collection: "paper" };
+		if (!item) return meta;
+		let fieldString = (name) => {
+			try {
+				let value = item.getField?.(name);
+				return typeof value === "string" ? value.trim() : "";
+			}
+			catch (_e) {
+				return "";
+			}
+		};
+		meta.title = fieldString("title");
+		meta.itemType = this.getRegularItemTypeName(item) || (item.isAttachment?.() ? "attachment" : "");
+		try {
+			let creators = item.getCreators?.() || [];
+			meta.authors = creators.map((creator) => {
+				if (!creator) return "";
+				let lastName = String(creator.lastName || creator.name || "").trim();
+				if (creator.fieldMode === 1 || !creator.firstName) return lastName;
+				let initials = String(creator.firstName).trim().split(/\s+/).filter(Boolean)
+					.map((part) => part[0].toUpperCase() + ".").join("");
+				return initials ? `${lastName}, ${initials}` : lastName;
+			}).filter(Boolean).join("; ");
+		}
+		catch (_e) {}
+		let year = null;
+		try { year = item.getField?.("year"); } catch (_e) {}
+		if (!year) {
+			try {
+				let date = String(item.getField?.("date") || "");
+				year = Zotero.Date?.strToDate?.(date)?.year || (date.match(/\d{4}/) || [])[0];
+			}
+			catch (_e) {}
+		}
+		let yearInt = parseInt(year, 10);
+		if (Number.isFinite(yearInt)) meta.year = yearInt;
+		meta.venue = fieldString("publicationTitle") || fieldString("proceedingsTitle") || fieldString("bookTitle");
+		meta.doi = fieldString("DOI").replace(/^https?:\/\/(dx\.)?doi\.org\//i, "").replace(/^doi:\s*/i, "").trim();
+		if (meta.itemType === "standard") meta.collection = "standard";
+		return meta;
+	},
+
+	resolveKBParsedBy(settings) {
+		let provider = /mineru\.net/i.test(String(settings.apiBaseURL || "")) ? "cloud-mineru" : "lan-mineru";
+		return { provider, backend: String(settings.modelVersion || "pipeline"), at: new Date().toISOString() };
+	},
+
+	buildKBMetaJSON({ docID, itemMeta, pdfSha256 = "", parsedBy = null }) {
+		let meta = {
+			doc_id: docID,
+			zotero_item_key: docID,
+			title: itemMeta.title || docID,
+			authors: itemMeta.authors || ""
+		};
+		if (Number.isFinite(itemMeta.year)) meta.year = itemMeta.year;
+		if (itemMeta.venue) meta.venue = itemMeta.venue;
+		if (itemMeta.doi) meta.doi = itemMeta.doi;
+		meta.item_type = itemMeta.itemType || "attachment";
+		meta.collection = itemMeta.collection || "paper";
+		if (pdfSha256) meta.pdf_sha256 = pdfSha256;
+		meta.quality = { reviewed_by: null, reviewed_at: null, flags: [] };
+		meta.parsed_by = parsedBy || { provider: "cloud-mineru", backend: "hybrid-engine", at: new Date().toISOString() };
+		return meta;
+	},
+
+	async sha256Hex(bytes) {
+		try {
+			let subtle = (typeof crypto !== "undefined" && crypto?.subtle) ? crypto.subtle : null;
+			if (!subtle) return "";
+			let digest = await subtle.digest("SHA-256", bytes);
+			return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, "0")).join("");
+		}
+		catch (e) {
+			this.log(`SHA-256 computation failed: ${e?.message || e}`);
+			return "";
+		}
+	},
+
+	buildKBMultipart({ boundary, meta, md, images = [], contentList = null, sourcePdf = null }) {
+		let encoder = new TextEncoder();
+		let chunks = [];
+		let partHeader = (name, filename, contentType) => encoder.encode(
+			`--${boundary}\r\nContent-Disposition: form-data; name="${name}"; filename="${filename}"\r\nContent-Type: ${contentType}\r\n\r\n`
+		);
+		chunks.push(partHeader("meta", "meta.json", "application/json"));
+		chunks.push(encoder.encode(JSON.stringify(meta, null, 2)));
+		chunks.push(encoder.encode("\r\n"));
+		chunks.push(partHeader("md", md.filename, "text/markdown"));
+		chunks.push(md.bytes);
+		chunks.push(encoder.encode("\r\n"));
+		for (let image of images) {
+			chunks.push(partHeader("images", image.filename, this.mimeFromFileName(image.filename)));
+			chunks.push(image.bytes);
+			chunks.push(encoder.encode("\r\n"));
+		}
+		if (contentList) {
+			chunks.push(partHeader("content_list", contentList.filename, "application/json"));
+			chunks.push(contentList.bytes);
+			chunks.push(encoder.encode("\r\n"));
+		}
+		if (sourcePdf) {
+			chunks.push(partHeader("source_pdf", sourcePdf.filename, "application/pdf"));
+			chunks.push(sourcePdf.bytes);
+			chunks.push(encoder.encode("\r\n"));
+		}
+		chunks.push(encoder.encode(`--${boundary}--\r\n`));
+		return this.concatBytes(chunks);
+	},
+
+	concatBytes(chunks) {
+		let total = 0;
+		for (let chunk of chunks) total += chunk.length;
+		let out = new Uint8Array(total);
+		let offset = 0;
+		for (let chunk of chunks) {
+			out.set(chunk, offset);
+			offset += chunk.length;
+		}
+		return out;
+	},
+
+	mimeFromFileName(name) {
+		let ext = this.getFileExtension(name).toLowerCase();
+		let map = {
+			".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".gif": "image/gif",
+			".webp": "image/webp", ".bmp": "image/bmp", ".svg": "image/svg+xml",
+			".tif": "image/tiff", ".tiff": "image/tiff"
+		};
+		return map[ext] || "application/octet-stream";
+	},
+
+	// multipart 头里的 filename 必须是可直接放入引号的 ASCII 串；非 ASCII（如中文 PDF 名）降级为下划线，
+	// 全部丢失时回退 fallback（调用方传 docID.pdf，保证服务端留档名可用）
+	sanitizeAsciiFileName(name, fallback = "source.pdf") {
+		let value = String(name || "").trim().replace(/["\\\r\n]/g, "");
+		if (!value) return fallback;
+		if (/^[\x20-\x7E]+$/.test(value)) return value;
+		let ext = this.getFileExtension(value);
+		let stem = value.slice(0, Math.max(0, value.length - ext.length)).replace(/[^\x20-\x7E]/g, "_")
+			.replace(/_+/g, "_").replace(/^_+|_+$/g, "");
+		if (!stem) return fallback;
+		return `${stem}${ext || ""}`;
+	},
+
+	async kbFetchJSON({ method = "GET", url, token = "", body = null, contentType = null, timeoutMS = 30000 }) {
+		let controller = new AbortController();
+		let timer = setTimeout(() => controller.abort(), Math.max(1000, timeoutMS));
+		try {
+			let headers = new Headers();
+			if (token) headers.set("X-API-Token", token);
+			if (contentType) headers.set("Content-Type", contentType);
+			let options = { method, headers, signal: controller.signal };
+			if (body !== null) options.body = body;
+			let response = await fetch(url, options);
+			let text = await response.text();
+			let json = null;
+			try { json = text ? JSON.parse(text) : null; } catch (_e) {}
+			return { ok: response.ok, status: response.status, text, json };
+		}
+		catch (e) {
+			let aborted = e?.name === "AbortError";
+			return {
+				ok: false,
+				status: 0,
+				text: "",
+				json: null,
+				error: aborted ? `请求超时（${Math.round(timeoutMS / 1000)}s）` : String(e?.message || e)
+			};
+		}
+		finally {
+			clearTimeout(timer);
+		}
+	},
+
+	// 契约 v1：POST /documents，幂等只比 md 内容哈希 → 重试安全；413 回退不带 source_pdf 重推（不消耗重试预算）
+	async pushEntryToKBService({ entry, normalized, scan, settings, includePdf, onStatus = null }) {
+		let docID = entry.parentItem?.key || entry.attachment.key;
+		let report = (text) => { if (typeof onStatus === "function") onStatus(text); };
+		let encoder = new TextEncoder();
+		report("读取产物");
+		let mdBytes = encoder.encode(normalized.mdContent);
+		let metaBase = this.extractKBItemMeta(entry.parentItem || entry.attachment);
+		metaBase.title = metaBase.title || entry.title || docID;
+		let parsedBy = this.resolveKBParsedBy(settings);
+		let imageParts = [];
+		let imagesBytes = 0;
+		for (let img of normalized.images) {
+			let bytes = await IOUtils.read(img.originalPath);
+			imagesBytes += bytes.length;
+			imageParts.push({ filename: img.name, bytes });
+		}
+		let contentListBytes = null;
+		if (scan.contentListPath) {
+			try { contentListBytes = await IOUtils.read(scan.contentListPath); } catch (_e) {}
+		}
+		let pdfPath = this.resolveKBPdfPath(entry);
+		let withPdf = includePdf && !!pdfPath;
+		let noPdfReason = includePdf && !pdfPath ? "条目没有可用的 PDF 附件" : "";
+		if (withPdf) {
+			let stat = await IOUtils.stat(pdfPath);
+			let estimated = mdBytes.length + imagesBytes + (contentListBytes?.length || 0) + stat.size + 8192;
+			if (estimated > this.KB_BODY_LIMIT_BYTES) {
+				withPdf = false;
+				noPdfReason = `请求体积约 ${Math.round(estimated / 1048576)}MB，超过 200MB 上限`;
+			}
+		}
+		let pdfBytes = null;
+		let pdfSha256 = "";
+		let retriesLeft = Math.max(0, settings.kbPushMaxRetries);
+		let attempt = 0;
+		let lastError = "";
+		let boundary = `----zoteruKBForm${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
+		while (true) {
+			attempt++;
+			report(withPdf ? `推送（第 ${attempt} 次，含 PDF）` : `推送（第 ${attempt} 次，无 PDF）`);
+			if (withPdf && !pdfBytes) {
+				pdfBytes = await IOUtils.read(pdfPath);
+				pdfSha256 = await this.sha256Hex(pdfBytes);
+			}
+			let meta = this.buildKBMetaJSON({ docID, itemMeta: metaBase, pdfSha256, parsedBy });
+			let body = this.buildKBMultipart({
+				boundary,
+				meta,
+				md: { filename: "result.md", bytes: mdBytes },
+				images: imageParts,
+				contentList: contentListBytes ? { filename: "content_list.json", bytes: contentListBytes } : null,
+				sourcePdf: withPdf ? { filename: this.sanitizeAsciiFileName(this.fileNameFromPath(pdfPath), `${docID}.pdf`), bytes: pdfBytes } : null
+			});
+			let response = await this.kbFetchJSON({
+				method: "POST",
+				url: `${settings.kbServiceURL}/documents`,
+				token: settings.kbApiToken,
+				body,
+				contentType: `multipart/form-data; boundary=${boundary}`,
+				timeoutMS: settings.kbPushTimeoutMS
+			});
+			if (response.status === 200 && response.json) {
+				return {
+					ok: true,
+					serverStatus: String(response.json.status || ""),
+					docID: String(response.json.doc_id || docID),
+					chunks: response.json.chunks,
+					pdfIncluded: withPdf,
+					noPdfReason: withPdf ? "" : noPdfReason
+				};
+			}
+			if (response.status === 200) {
+				return { ok: false, error: "服务端返回 200 但响应不是合法 JSON" };
+			}
+			if (response.status === 413 && withPdf) {
+				withPdf = false;
+				noPdfReason = "服务端返回 413（请求超 200MB），已回退为不带 PDF 重推";
+				pdfBytes = null;
+				pdfSha256 = "";
+				continue;
+			}
+			if (response.status === 413) {
+				return { ok: false, error: "HTTP 413: 不带 PDF 仍超 200MB 上限" };
+			}
+			if (response.status === 400 || response.status === 401 || response.status === 403) {
+				let detail = response.json?.detail || (response.text || "").slice(0, 200) || "";
+				return { ok: false, error: `HTTP ${response.status}${detail ? `: ${detail}` : ""}` };
+			}
+			lastError = response.error || `HTTP ${response.status}: ${(response.text || "").slice(0, 200)}`;
+			if (retriesLeft <= 0) break;
+			retriesLeft--;
+			await new Promise((resolve) => setTimeout(resolve, Math.min(1500 * attempt, 5000)));
+		}
+		return { ok: false, error: lastError };
+	},
+
+	async markKBSyncTag(item, pdfIncluded, settings) {
+		if (!settings.kbSyncTagEnabled || !item?.addTag) return;
+		try {
+			let tag = pdfIncluded ? this.KB_SYNC_TAG : this.KB_SYNC_TAG_NO_PDF;
+			let existing = (item.getTags?.() || []).map((t) => t.tag)
+				.filter((t) => t === this.KB_SYNC_TAG || t === this.KB_SYNC_TAG_NO_PDF);
+			let changed = false;
+			for (let old of existing) {
+				if (old !== tag) {
+					item.removeTag(old);
+					changed = true;
+				}
+			}
+			if (!existing.includes(tag)) {
+				item.addTag(tag, 0);
+				changed = true;
+			}
+			if (changed) await item.saveTx();
+		}
+		catch (e) {
+			this.log(`KB sync tag failed: ${e?.message || e}`);
+		}
+	},
+
+	async testKBServiceConnection(settings = null) {
+		settings = settings || this.getSettings();
+		if (!settings.kbServiceURL) return { ok: false, error: "未配置知识库服务 URL" };
+		let started = Date.now();
+		let response = await this.kbFetchJSON({
+			method: "GET",
+			url: `${settings.kbServiceURL}/health`,
+			token: settings.kbApiToken,
+			timeoutMS: 10000
+		});
+		let latencyMS = Date.now() - started;
+		if (response.status === 200) {
+			return { ok: true, status: response.status, latencyMS, body: response.json ?? response.text };
+		}
+		return {
+			ok: false,
+			status: response.status,
+			latencyMS,
+			error: response.error || `HTTP ${response.status}: ${(response.text || "").slice(0, 200)}`
+		};
+	},
+
+	// Z2 软删同步：条目进回收站（trash）或永久删除（delete）→ DELETE /docs/{doc_id}
+	// 服务端为软删语义；恢复条目后重推会得到 restored，无需处理复活逻辑
+	handleKBNotifierEvent(event, type, ids, extraData) {
+		if (type !== "item") return;
+		if (event !== "trash" && event !== "delete") return;
+		if (!Array.isArray(ids) || !ids.length) return;
+		let settings = this.getSettings();
+		if (!settings.kbDeleteSyncEnabled || !settings.kbServiceURL || !settings.kbApiToken) return;
+		this._kbDeleteChain = this._kbDeleteChain
+			.then(() => this.syncKBItemDeletions(event, ids, extraData, settings))
+			.catch((e) => this.log(`KB delete sync chain failed: ${e?.message || e}`));
+	},
+
+	async syncKBItemDeletions(event, ids, extraData, settings) {
+		for (let id of ids) {
+			let docID = this.resolveKBDocIDForDelete(event, id, extraData);
+			if (!docID) continue;
+			if (this._kbDeleteSynced.has(docID)) continue;
+			let result = await this.deleteDocFromKB(docID, settings);
+			if (result.ok) {
+				this._kbDeleteSynced.add(docID);
+				this.log(`KB delete sync: ${docID} ${result.deleted ? "removed from service" : "not on server (no-op)"}`);
+			}
+			else {
+				this.log(`KB delete sync FAILED for ${docID}: ${result.error}`);
+			}
+		}
+	},
+
+	resolveKBDocIDForDelete(event, id, extraData) {
+		try {
+			let item = Zotero.Items.get(id);
+			if (event === "trash") {
+				if (!item || !item.isRegularItem?.()) return null;
+				if (!item.deleted) return null;
+				return item.key;
+			}
+			if (item) return item.isRegularItem?.() ? item.key : null;
+			let entry = extraData?.[id];
+			let key = entry?.key || entry?.data?.key || null;
+			return key ? String(key) : null;
+		}
+		catch (e) {
+			this.log(`KB delete sync resolve failed (id=${id}): ${e?.message || e}`);
+			return null;
+		}
+	},
+
+	async deleteDocFromKB(docID, settings = null, { retries = 2 } = {}) {
+		settings = settings || this.getSettings();
+		if (!settings.kbServiceURL || !settings.kbApiToken) return { ok: false, error: "知识库服务未配置" };
+		let url = `${settings.kbServiceURL}/docs/${encodeURIComponent(String(docID))}`;
+		let lastError = "";
+		for (let attempt = 0; attempt <= Math.max(0, retries); attempt++) {
+			if (attempt > 0) await new Promise((resolve) => setTimeout(resolve, 1000 * attempt));
+			let response = await this.kbFetchJSON({
+				method: "DELETE",
+				url,
+				token: settings.kbApiToken,
+				timeoutMS: Math.min(settings.kbPushTimeoutMS, 30000)
+			});
+			if (response.status === 200 || response.status === 204) {
+				return { ok: true, deleted: true, detail: response.json };
+			}
+			if (response.status === 404) {
+				return { ok: true, deleted: false, detail: "doc not found on server" };
+			}
+			if (response.status === 400 || response.status === 401 || response.status === 403) {
+				return { ok: false, error: `HTTP ${response.status}${response.json?.detail ? `: ${response.json.detail}` : ""}` };
+			}
+			lastError = response.error || `HTTP ${response.status}: ${(response.text || "").slice(0, 200)}`;
+		}
+		return { ok: false, error: lastError };
 	},
 
 	getFileExtension(fileName) {

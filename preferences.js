@@ -10,7 +10,19 @@ var ZoteroMineruPreferences = {
 		{ id: "mineru-timeout-sec", pref: "mineruTimeoutSec", type: "int", fallback: 120 },
 		{ id: "mineru-daily-file-limit", pref: "mineruDailyFileLimit", type: "int", fallback: 5000 },
 		{ id: "mineru-priority-page-limit", pref: "mineruPriorityPageLimit", type: "int", fallback: 1000, legacyPref: "mineruPriorityFileLimit" },
-		{ id: "kb-root-path", pref: "kbRootPath", type: "string", fallback: "" }
+		{ id: "kb-root-path", pref: "kbRootPath", type: "string", fallback: "" },
+		{ id: "kb-service-url", pref: "kbServiceURL", type: "string", fallback: "http://192.168.1.105:8100" },
+		{ id: "kb-api-token", pref: "kbApiToken", type: "string", fallback: "" },
+		{ id: "kb-push-timeout-sec", pref: "kbPushTimeoutSec", type: "int", fallback: 120 },
+		{ id: "kb-push-max-retries", pref: "kbPushMaxRetries", type: "int", fallback: 3 }
+	],
+
+	BOOL_FIELDS: [
+		{ id: "kb-export-local", pref: "kbExportLocal", fallback: true },
+		{ id: "kb-export-http", pref: "kbExportHTTP", fallback: true },
+		{ id: "kb-push-include-pdf", pref: "kbPushIncludePdf", fallback: true },
+		{ id: "kb-delete-sync-enabled", pref: "kbDeleteSyncEnabled", fallback: true },
+		{ id: "kb-sync-tag-enabled", pref: "kbSyncTagEnabled", fallback: true }
 	],
 
 	debounceSave() {
@@ -88,6 +100,12 @@ var ZoteroMineruPreferences = {
 			input.value = String(value);
 		}
 		this.setModelVersion(String(Zotero.Prefs.get(this.PREF_BRANCH + "mineruModelVersion", true) || "pipeline"));
+		for (let field of this.BOOL_FIELDS) {
+			let input = this.$(field.id);
+			if (!input) continue;
+			let value = Zotero.Prefs.get(this.PREF_BRANCH + field.pref, true);
+			input.checked = (value === undefined || value === null || value === "") ? field.fallback : !!value;
+		}
 		this.renderTokenRows(this.getStoredTokens());
 		this.renderUsage();
 		this.setStatus("");
@@ -110,6 +128,10 @@ var ZoteroMineruPreferences = {
 				Zotero.Prefs.set(this.PREF_BRANCH + field.pref, String(value || field.fallback || "").trim(), true);
 			}
 			Zotero.Prefs.set(this.PREF_BRANCH + "mineruModelVersion", this.getModelVersion(), true);
+			for (let field of this.BOOL_FIELDS) {
+				let input = this.$(field.id);
+				if (input) Zotero.Prefs.set(this.PREF_BRANCH + field.pref, !!input.checked, true);
+			}
 			Zotero.Prefs.set(this.PREF_BRANCH + "mineruTokens", JSON.stringify(this.collectTokenRows()), true);
 			if (!silent) this.setStatus("已保存");
 			this.renderUsage();
@@ -304,6 +326,39 @@ var ZoteroMineruPreferences = {
 		}
 	},
 
+	setKbStatus(message, isError = false) {
+		let status = this.$("kb-connection-status");
+		if (!status) return;
+		status.textContent = message || "";
+		status.style.color = isError ? "#b03232" : "#1d6e36";
+	},
+
+	async testKbConnection() {
+		this.saveSettings({ silent: true });
+		let bridge = this.getMcpBridge();
+		if (!bridge?.testKBServiceConnection) {
+			this.setKbStatus("测试失败：插件主窗口对象不可用", true);
+			return;
+		}
+		this.setKbStatus("正在测试连接...");
+		let output = this.$("kb-connection-output");
+		if (output) output.textContent = "";
+		try {
+			let result = await bridge.testKBServiceConnection();
+			if (result.ok) {
+				this.setKbStatus(`连接正常（HTTP ${result.status}，${result.latencyMS}ms）`);
+				if (output) output.textContent = JSON.stringify(result.body, null, 2);
+			}
+			else {
+				this.setKbStatus(`连接失败${Number.isFinite(result.status) && result.status ? `（HTTP ${result.status}）` : ""}`, true);
+				if (output) output.textContent = result.error || "未知错误";
+			}
+		}
+		catch (e) {
+			this.setKbStatus(`连接失败: ${e.message || e}`, true);
+		}
+	},
+
 	init() {
 		if (this.initialized) return;
 		try {
@@ -334,6 +389,17 @@ var ZoteroMineruPreferences = {
 					this.setMcpStatus(`生成失败: ${e.message || e}`, true);
 				});
 			});
+			this.$("kb-test-connection-button")?.addEventListener("click", () => {
+				this.testKbConnection().catch((e) => {
+					Zotero.logError(e);
+					this.setKbStatus(`连接失败: ${e.message || e}`, true);
+				});
+			});
+			for (let field of this.BOOL_FIELDS) {
+				let input = this.$(field.id);
+				if (!input) continue;
+				input.addEventListener("change", () => this.saveSettings({ silent: true }));
+			}
 			this.renderMcpBridgeInfo();
 			this.$("mineru-add-token-button")?.addEventListener("click", () => {
 				this.addTokenRow();

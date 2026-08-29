@@ -7,4 +7,4 @@ zoteru-parse-selected =
 zoteru-reparse-selected =
     .label = 重新解析并替换已有 MinerU Markdown 附件
 zoteru-export-kb =
-    .label = 导出到知识库
+    .label = 推送到知识库
