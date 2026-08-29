@@ -29,6 +29,8 @@ var ZoteroMinerU = {
 	start() {
 		if (this.socket) return;
 		try {
+			// observer 注册与 socket 无依赖且自带 try/catch——放在最前，端口被占（如双开 Zotero）时删除同步仍生效
+			this.registerKBDeleteSyncObserver();
 			this.cleanupPluginTempRoot().catch((e) => this.log(`Temp cleanup failed: ${e?.message || e}`));
 			this.installMcpBridge().catch((e) => {
 				this.log(`MCP bridge install failed: ${e?.message || e}`);
@@ -47,7 +49,6 @@ var ZoteroMinerU = {
 			});
 			this.socket = socket;
 			this.log(`Listening on http://127.0.0.1:${this.port}`);
-			this.registerKBDeleteSyncObserver();
 		}
 		catch (e) {
 			this.log(`Failed to start: ${e}`);
@@ -858,25 +859,39 @@ var ZoteroMinerU = {
 
 	async pushToKnowledgeBase({ window = null, selectedItems = null, overrideKbRootPath = null, target = null, includePdf = null } = {}) {
 		let settings = this.getSettings();
-		let targets = [];
-		if (target === "local" || target === "http" || target === "both") {
-			targets = target === "both" ? ["local", "http"] : [target];
-		}
-		else {
+		let explicitTarget = ["local", "http", "both"].includes(target);
+		let targets = explicitTarget ? (target === "both" ? ["local", "http"] : [target]) : [];
+		if (!explicitTarget) {
 			if (settings.kbExportLocal) targets.push("local");
 			if (settings.kbExportHTTP) targets.push("http");
 		}
 		let kbRootPath = overrideKbRootPath ? String(overrideKbRootPath).trim() : settings.kbRootPath;
+		// 目标可用性：按设置勾选驱动时，未配置的目标降级剔除并提示（升级用户 HTTP 未配 token 仍可本地导出，
+		// 不被整体阻断）；显式指定 target 的调用方（MCP/参数）语义明确，不可用直接报错
 		let problems = [];
+		let notices = [];
+		let localBlocked = "";
 		if (targets.includes("local")) {
-			if (!kbRootPath) problems.push("本地目录导出：请先在设置中配置知识库路径。");
-			else if (!await IOUtils.exists(kbRootPath)) problems.push(`本地知识库路径不存在: ${kbRootPath}`);
+			if (!kbRootPath) localBlocked = "本地目录导出已跳过：未配置知识库路径。";
+			else if (!await IOUtils.exists(kbRootPath)) localBlocked = `本地目录导出已跳过：路径不存在 ${kbRootPath}`;
 		}
+		let httpBlocked = "";
 		if (targets.includes("http")) {
-			if (!settings.kbServiceURL) problems.push("HTTP 推送：请先在设置中配置知识库服务 URL。");
-			else if (!settings.kbApiToken) problems.push("HTTP 推送：请先在设置中填写知识库 API Token。");
+			if (!settings.kbServiceURL) httpBlocked = "HTTP 推送已跳过：未配置知识库服务 URL。";
+			else if (!settings.kbApiToken) httpBlocked = "HTTP 推送已跳过：未填写知识库 API Token。";
 		}
-		if (!targets.length) problems.push("未选择任何推送目标（本地目录 / HTTP 服务），请在设置中勾选。");
+		if (explicitTarget) {
+			if (localBlocked) problems.push(localBlocked.replace("已跳过", "不可用"));
+			if (httpBlocked) problems.push(httpBlocked.replace("已跳过", "不可用"));
+		}
+		else {
+			if (localBlocked) notices.push(localBlocked);
+			if (httpBlocked) notices.push(httpBlocked);
+			targets = targets.filter((t) => (t === "local" ? !localBlocked : !httpBlocked));
+		}
+		if (!targets.length && !problems.length) {
+			problems.push("没有任何可用的推送目标：本地目录与 HTTP 服务均未配置，请在设置（zoterU → 知识库服务）中至少完成一项配置。");
+		}
 		if (problems.length) {
 			this.showAlert(window, "zoterU", problems.join("\n"));
 			return { success: false, error: problems.join(" ") };
@@ -948,10 +963,12 @@ var ZoteroMinerU = {
 				update({ text: "失败", percent: 100 });
 			}
 		}
-		progress.addDescription(`完成 ${successes}/${mdAttachments.length}`);
+		let summary = `完成 ${successes}/${mdAttachments.length}`;
+		if (notices.length) summary += `；${notices.join(" ")}`;
+		progress.addDescription(summary);
 		progress.startCloseTimer(5000);
 		if (failures.length) this.showAlert(window, "推送部分失败", failures.slice(0, 10).map((f) => `${f.title}: ${f.error}`).join("\n"));
-		return { success: failures.length === 0, total: mdAttachments.length, successes, failures, http: httpResults };
+		return { success: failures.length === 0, total: mdAttachments.length, successes, failures, http: httpResults, notices };
 	},
 
 	async scanKBSourceDir(sourceDir) {
@@ -1086,6 +1103,8 @@ var ZoteroMinerU = {
 	},
 
 	resolveKBParsedBy(settings) {
+		// backend 取当前 modelVersion（pipeline/vlm）；契约示例值为 hybrid-engine，
+		// 取值口径待与服务端确认后再统一（对接方不单方面定契约字段语义）
 		let provider = /mineru\.net/i.test(String(settings.apiBaseURL || "")) ? "cloud-mineru" : "lan-mineru";
 		return { provider, backend: String(settings.modelVersion || "pipeline"), at: new Date().toISOString() };
 	},
@@ -1243,10 +1262,11 @@ var ZoteroMinerU = {
 		let noPdfReason = includePdf && !pdfPath ? "条目没有可用的 PDF 附件" : "";
 		if (withPdf) {
 			let stat = await IOUtils.stat(pdfPath);
-			let estimated = mdBytes.length + imagesBytes + (contentListBytes?.length || 0) + stat.size + 8192;
+			let estimated = mdBytes.length + imagesBytes + (contentListBytes?.length || 0) + stat.size + 65536;
 			if (estimated > this.KB_BODY_LIMIT_BYTES) {
 				withPdf = false;
 				noPdfReason = `请求体积约 ${Math.round(estimated / 1048576)}MB，超过 200MB 上限`;
+				this.log(`KB push ${docID}: ${noPdfReason}; pushing without source_pdf`);
 			}
 		}
 		let pdfBytes = null;
@@ -1398,6 +1418,8 @@ var ZoteroMinerU = {
 				return item.key;
 			}
 			if (item) return item.isRegularItem?.() ? item.key : null;
+			// delete 事件无法区分条目类型（extraData 只有 libraryID/key，附件/笔记同样走这里）：
+			// 未推送过的 key 服务端 404 → no-op 无害，换取真删路径不漏同步
 			let entry = extraData?.[id];
 			let key = entry?.key || entry?.data?.key || null;
 			return key ? String(key) : null;

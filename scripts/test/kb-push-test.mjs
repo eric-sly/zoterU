@@ -15,6 +15,9 @@ const BASE = `http://127.0.0.1:${PORT}`;
 // ---------- sandbox stubs ----------
 const fileStore = new Map(); // path -> { dir?: true, bytes?: Uint8Array }
 const zoteroItems = new Map();
+const prefStore = {};
+const alerts = [];
+const progressDescriptions = [];
 
 const dirOf = (p) => p.slice(0, Math.max(0, p.lastIndexOf("\\")));
 const leafOf = (p) => p.split(/[\\/]/).pop();
@@ -61,9 +64,19 @@ const sandbox = {
 	Zotero: {
 		debug: () => {},
 		logError: () => {},
-		Prefs: { get: () => "" },
+		Prefs: {
+			get: (key) => (key in prefStore ? prefStore[key] : ""),
+			set: (key, value) => { prefStore[key] = value; }
+		},
 		Items: { get: (id) => zoteroItems.get(id) || null },
-		Date: { strToDate: (s) => ({ year: (String(s).match(/\d{4}/) || [null])[0] }) }
+		Date: { strToDate: (s) => ({ year: (String(s).match(/\d{4}/) || [null])[0] }) },
+		alert: (_win, title, msg) => alerts.push({ title, msg }),
+		ProgressWindow: class {
+			changeHeadline() {}
+			show() {}
+			addDescription(text) { progressDescriptions.push(text); }
+			startCloseTimer() {}
+		}
 	},
 	IOUtils: IOUtilsStub,
 	PathUtils: PathUtilsStub,
@@ -75,6 +88,10 @@ const sandbox = {
 	setTimeout,
 	clearTimeout,
 	console
+};
+sandbox.Zotero.ProgressWindow.prototype.ItemProgress = class {
+	setText() {}
+	setProgress() {}
 };
 sandbox.crypto = globalThis.crypto;
 
@@ -131,6 +148,7 @@ const pdfPath = "C:\\storage\\paper.pdf";
 fileStore.set(mdPath, { bytes: new TextEncoder().encode(
 	"# Title\n\n![fig a](images/raw_fig_a.jpg)\n\n![fig b](images/raw_fig_b.png)\n"
 ) });
+fileStore.set("C:\\storage\\ATTACH01\\images", { dir: true });
 fileStore.set(imgA, { bytes: new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8]) });
 fileStore.set(imgB, { bytes: new Uint8Array([9, 8, 7, 6, 5, 4, 3, 2, 1]) });
 fileStore.set(clPath, { bytes: new TextEncoder().encode('[{"type":"text","page_idx":0}]') });
@@ -362,6 +380,69 @@ console.log("== local export + sync tag ==");
 	check("saveTx called once on change", item._saved === 1, String(item._saved));
 	await Z.markKBSyncTag(item, false, makeSettings());
 	check("no saveTx when tag unchanged", item._saved === 1, String(item._saved));
+}
+
+console.log("== pushToKnowledgeBase orchestration (review P1-1 regression) ==");
+{
+	const kbRoot = "C:\\kbfake-root";
+	const mdAtt = {
+		id: 901,
+		key: "ATTACH01",
+		isAttachment: () => true,
+		isRegularItem: () => false,
+		parentItemID: 0,
+		getFilePath: () => mdPath,
+		getField: (name) => (name === "title" ? "Orphan md" : ""),
+		addTag: (t) => mdAtt._tags.push(t),
+		removeTag: (t) => { mdAtt._tags = mdAtt._tags.filter((x) => x !== t); },
+		getTags: () => mdAtt._tags.map((t) => ({ tag: t })),
+		saveTx: async () => {},
+		_tags: []
+	};
+	const KB = "extensions.zoteru.";
+	const setPrefs = (overrides = {}) => {
+		prefStore[KB + "kbExportLocal"] = true;
+		prefStore[KB + "kbExportHTTP"] = true;
+		prefStore[KB + "kbRootPath"] = kbRoot;
+		prefStore[KB + "kbServiceURL"] = BASE;
+		prefStore[KB + "kbApiToken"] = "TESTTOKEN";
+		for (const [k, v] of Object.entries(overrides)) prefStore[KB + k] = v;
+	};
+
+	// T1: P1-1 回归——HTTP 未配 token 时本地导出仍完成（降级而非整体阻断）
+	setPrefs({ kbApiToken: "" });
+	alerts.length = 0;
+	let res = await Z.pushToKnowledgeBase({ window: {}, selectedItems: [mdAtt] });
+	check("P1-1: local export completes without token", res.success === true && res.successes === 1, JSON.stringify(res));
+	check("P1-1: notice explains HTTP skip", (res.notices || []).some((n) => n.includes("API Token")), JSON.stringify(res.notices));
+	check("P1-1: no hard alert raised", alerts.length === 0, JSON.stringify(alerts));
+	check("P1-1: summary mentions skip in progress window", progressDescriptions.some((d) => d.includes("HTTP 推送已跳过")),
+		JSON.stringify(progressDescriptions));
+
+	// T2: 显式 target="http" 且无 token → 硬错误（调用方语义明确，不降级）
+	setPrefs({ kbApiToken: "" });
+	alerts.length = 0;
+	res = await Z.pushToKnowledgeBase({ window: {}, selectedItems: [mdAtt], target: "http" });
+	check("explicit http target without token hard-fails",
+		res.success === false && (res.error || "").includes("Token") && alerts.length === 1, JSON.stringify(res));
+
+	// T3: 双目标均未配置 → 明确报错
+	setPrefs({ kbApiToken: "", kbServiceURL: "", kbRootPath: "" });
+	res = await Z.pushToKnowledgeBase({ window: {}, selectedItems: [mdAtt] });
+	check("no usable target -> explicit error",
+		res.success === false && (res.error || "").includes("没有任何可用的推送目标"), JSON.stringify(res));
+
+	// T4: 仅本地勾选 → 正常完成，无降级提示
+	setPrefs({ kbExportHTTP: false });
+	res = await Z.pushToKnowledgeBase({ window: {}, selectedItems: [mdAtt] });
+	check("local-only push clean", res.success === true && (res.notices || []).length === 0, JSON.stringify(res));
+
+	// T5: 本地路径不存在但 HTTP 可用 → 降级后真实推送（独立 md 附件，doc_id=附件 key）
+	setPrefs({ kbExportHTTP: true, kbRootPath: "C:\\definitely-missing-path" });
+	res = await Z.pushToKnowledgeBase({ window: {}, selectedItems: [mdAtt] });
+	check("local missing -> degraded to http push", res.success === true && res.http?.[0]?.ok === true, JSON.stringify(res));
+	check("local missing notice present", (res.notices || []).some((n) => n.includes("本地目录导出已跳过")), JSON.stringify(res.notices));
+	check("standalone md pushed without pdf tag", mdAtt._tags.includes("#KB-Synced-无PDF留档"), JSON.stringify(mdAtt._tags));
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);
