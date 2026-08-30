@@ -14,8 +14,6 @@
 				},
 				{
 					"version": "1.5.0",
-				{
-					"version": "1.5.0",
 					"update_link": "https://github.com/eric-sly/zoterU/releases/download/v1.5.0/zoterU-1.5.0.xpi",
 					"applications": {
 						"zotero": {
