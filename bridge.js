@@ -1219,8 +1219,8 @@ var ZoteroMinerU = {
 
 	async kbFetchJSON({ method = "GET", url, token = "", body = null, contentType = null, timeoutMS = 30000 }) {
 		let { fetchImpl, AbortControllerCtor } = this.resolveFetchGlobals();
-		if (typeof fetchImpl !== "function") {
-			return { ok: false, status: 0, text: "", json: null, error: "Zotero 环境缺少 fetch 全局，无法发起网络请求" };
+		if (typeof fetchImpl !== "function" || typeof AbortControllerCtor !== "function") {
+			return { ok: false, status: 0, text: "", json: null, error: "Zotero 环境缺少 fetch/AbortController 全局，无法发起网络请求" };
 		}
 		let controller = new AbortControllerCtor();
 		let timer = setTimeout(() => controller.abort(), Math.max(1000, timeoutMS));
