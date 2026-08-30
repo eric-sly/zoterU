@@ -3,6 +3,18 @@
 		"zoteru@github.io": {
 			"updates": [
 				{
+					"version": "2.0.1",
+					"update_link": "https://github.com/eric-sly/zoterU/releases/download/v2.0.1/zoterU-2.0.1.xpi",
+					"applications": {
+						"zotero": {
+							"strict_min_version": "9.0",
+							"strict_max_version": "10.*"
+						}
+					}
+				},
+				{
+					"version": "1.5.0",
+				{
 					"version": "1.5.0",
 					"update_link": "https://github.com/eric-sly/zoterU/releases/download/v1.5.0/zoterU-1.5.0.xpi",
 					"applications": {
