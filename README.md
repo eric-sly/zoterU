@@ -34,6 +34,8 @@ A Zotero 9/10 plugin that integrates [MinerU](https://mineru.net) PDF parsing in
 
 The HTTP push targets the [composites knowledge base service](https://github.com/eric-sly/composites-kb); the wire format is frozen as API contract v1 (see that repo's `docs/api-contract-v1.md`).
 
+> **Note:** The 2.0.x series only adds knowledge base push and delete sync on top of v1.5.0. If you don't need the knowledge base, just stay on [v1.5.0](https://github.com/eric-sly/zoterU/releases/tag/v1.5.0) — it already has MinerU parsing, MCP, and Zotero 10 compatibility.
+
 ### Setup
 
 Zotero -> Edit -> Settings -> `zoterU`:
@@ -237,6 +239,8 @@ MIT — see [LICENSE](LICENSE).
 | v1.4.2 | MCP stdio 桥 |
 
 HTTP 推送的对接目标是 [复合材料知识库服务](https://github.com/eric-sly/composites-kb)；报文格式冻结为 API 契约 v1（见该仓 `docs/api-contract-v1.md`）。
+
+> **说明：** 2.0 系列相对 v1.5.0 的增量只有知识库推送与删除同步。**不需要知识库功能的用户直接使用 [v1.5.0](https://github.com/eric-sly/zoterU/releases/tag/v1.5.0) 即可**——MinerU 解析、MCP、Zotero 10 兼容在 1.5.0 已全部具备。
 
 ### 设置
 
