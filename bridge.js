@@ -182,7 +182,7 @@ var ZoteroMinerU = {
 			let match = headers.match(/Content-Length:\s*(\d+)/i);
 			let contentLength = match ? parseInt(match[1], 10) : 0;
 			let bodyText = requestText.slice(headerEnd + 4);
-			let bodyByteLength = new TextEncoder().encode(bodyText).length;
+			let bodyByteLength = this.newTextEncoder().encode(bodyText).length;
 			if (bodyByteLength >= contentLength) break;
 		}
 		return requestText;
@@ -382,7 +382,7 @@ var ZoteroMinerU = {
 	},
 
 	writeResponse(output, response) {
-		let bodyBytes = new TextEncoder().encode(response.body);
+		let bodyBytes = this.newTextEncoder().encode(response.body);
 		let raw = [
 			`HTTP/1.1 ${response.status} ${response.statusText}`,
 			`Content-Type: ${response.contentType}`,
@@ -1141,7 +1141,7 @@ var ZoteroMinerU = {
 	},
 
 	buildKBMultipart({ boundary, meta, md, images = [], contentList = null, sourcePdf = null }) {
-		let encoder = new TextEncoder();
+		let encoder = this.newTextEncoder();
 		let chunks = [];
 		let partHeader = (name, filename, contentType) => encoder.encode(
 			`--${boundary}\r\nContent-Disposition: form-data; name="${name}"; filename="${filename}"\r\nContent-Type: ${contentType}\r\n\r\n`
@@ -1206,16 +1206,32 @@ var ZoteroMinerU = {
 		return `${stem}${ext || ""}`;
 	},
 
+	// Zotero 10 的 bootstrap 作用域不再暴露 fetch/AbortController 等 WebIDL 全局：
+	// 当前作用域有则直接用，没有则从主窗口 realm 借用（跨 realm 的 Promise/Response 可正常交互）
+	resolveFetchGlobals() {
+		let win = Zotero.getMainWindows?.()?.[0] || Zotero.getMainWindow?.() || null;
+		let fetchImpl = null;
+		if (typeof fetch !== "undefined") fetchImpl = fetch.bind(globalThis);
+		else if (win && typeof win.fetch === "function") fetchImpl = win.fetch.bind(win);
+		let AbortControllerCtor = (typeof AbortController !== "undefined") ? AbortController : win?.AbortController;
+		return { fetchImpl, AbortControllerCtor };
+	},
+
 	async kbFetchJSON({ method = "GET", url, token = "", body = null, contentType = null, timeoutMS = 30000 }) {
-		let controller = new AbortController();
+		let { fetchImpl, AbortControllerCtor } = this.resolveFetchGlobals();
+		if (typeof fetchImpl !== "function") {
+			return { ok: false, status: 0, text: "", json: null, error: "Zotero 环境缺少 fetch 全局，无法发起网络请求" };
+		}
+		let controller = new AbortControllerCtor();
 		let timer = setTimeout(() => controller.abort(), Math.max(1000, timeoutMS));
 		try {
-			let headers = new Headers();
-			if (token) headers.set("X-API-Token", token);
-			if (contentType) headers.set("Content-Type", contentType);
+			// fetch 规范接受普通对象作为 headers，不依赖 Headers 全局
+			let headers = {};
+			if (token) headers["X-API-Token"] = token;
+			if (contentType) headers["Content-Type"] = contentType;
 			let options = { method, headers, signal: controller.signal };
 			if (body !== null) options.body = body;
-			let response = await fetch(url, options);
+			let response = await fetchImpl(url, options);
 			let text = await response.text();
 			let json = null;
 			try { json = text ? JSON.parse(text) : null; } catch (_e) {}
@@ -1240,7 +1256,7 @@ var ZoteroMinerU = {
 	async pushEntryToKBService({ entry, normalized, scan, settings, includePdf, onStatus = null }) {
 		let docID = entry.parentItem?.key || entry.attachment.key;
 		let report = (text) => { if (typeof onStatus === "function") onStatus(text); };
-		let encoder = new TextEncoder();
+		let encoder = this.newTextEncoder();
 		report("读取产物");
 		let mdBytes = encoder.encode(normalized.mdContent);
 		let metaBase = this.extractKBItemMeta(entry.parentItem || entry.attachment);
@@ -1455,6 +1471,14 @@ var ZoteroMinerU = {
 			lastError = response.error || `HTTP ${response.status}: ${(response.text || "").slice(0, 200)}`;
 		}
 		return { ok: false, error: lastError };
+	},
+
+	// Zotero 10 bootstrap 作用域可能缺 TextEncoder 全局：当前作用域有则用，缺则从主窗口 realm 借
+	newTextEncoder() {
+		let TE = (typeof TextEncoder !== "undefined") ? TextEncoder
+			: (Zotero.getMainWindows?.()?.[0] || Zotero.getMainWindow?.())?.TextEncoder;
+		if (typeof TE !== "function") throw new Error("Zotero 环境缺少 TextEncoder 全局");
+		return new TE();
 	},
 
 	getFileExtension(fileName) {
@@ -1796,7 +1820,9 @@ var ZoteroMinerU = {
 		if (!batchID || !uploadURL) throw new Error("MinerU API 未返回 batch_id 或 upload_url");
 
 		this.reportStatus(options.onStatus, "上传 PDF", 30);
-		let uploadResponse = await fetch(uploadURL, { method: "PUT", body: fileBytes });
+		let { fetchImpl: uploadFetch } = this.resolveFetchGlobals();
+		if (typeof uploadFetch !== "function") throw new Error("Zotero 环境缺少 fetch 全局，无法上传 PDF");
+		let uploadResponse = await uploadFetch(uploadURL, { method: "PUT", body: fileBytes });
 		if (!uploadResponse.ok) {
 			let errText = await uploadResponse.text();
 			throw new Error(`上传 PDF 失败 ${uploadResponse.status}: ${errText.slice(0, 300)}`);
@@ -1826,13 +1852,15 @@ var ZoteroMinerU = {
 	},
 
 	async requestMineruJSON({ url, token, method = "GET", body = null }) {
-		let headers = new Headers({ "Accept": "application/json", "Authorization": `Bearer ${token}` });
+		let { fetchImpl } = this.resolveFetchGlobals();
+		if (typeof fetchImpl !== "function") throw new Error("Zotero 环境缺少 fetch 全局，无法访问 MinerU API");
+		let headers = { "Accept": "application/json", "Authorization": `Bearer ${token}` };
 		let requestOptions = { method, headers };
 		if (body !== null) {
-			headers.set("Content-Type", "application/json");
+			headers["Content-Type"] = "application/json";
 			requestOptions.body = JSON.stringify(body);
 		}
-		let response = await fetch(url, requestOptions);
+		let response = await fetchImpl(url, requestOptions);
 		let responseText = await response.text();
 		if (!response.ok) throw new Error(`MinerU API 请求失败 ${response.status}: ${responseText.slice(0, 500)}`);
 		try {
@@ -1891,11 +1919,12 @@ var ZoteroMinerU = {
 			candidates.push({ url: httpsURL, withAuth: false }, { url: httpsURL, withAuth: true });
 		}
 		let lastError = "";
+		let { fetchImpl: downloadFetch } = this.resolveFetchGlobals();
+		if (typeof downloadFetch !== "function") throw new Error("Zotero 环境缺少 fetch 全局，无法下载解析结果");
 		for (let candidate of candidates) {
-			let headers = new Headers();
-			if (candidate.withAuth) headers.set("Authorization", `Bearer ${token}`);
+			let headers = candidate.withAuth ? { "Authorization": `Bearer ${token}` } : {};
 			try {
-				let response = await fetch(candidate.url, { method: "GET", headers });
+				let response = await downloadFetch(candidate.url, { method: "GET", headers });
 				if (!response.ok) {
 					lastError = `HTTP ${response.status}: ${(await response.text()).slice(0, 200)}`;
 					continue;
