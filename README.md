@@ -18,10 +18,21 @@ A Zotero 9/10 plugin that integrates [MinerU](https://mineru.net) PDF parsing in
 
 ### Install
 
-1. Download `zoterU-1.5.0.xpi` from [Releases](https://github.com/eric-sly/zoterU/releases)
+1. Download `zoterU-2.0.1.xpi` from [Releases](https://github.com/eric-sly/zoterU/releases)
 2. Zotero → Tools → Add-ons → ⚙️ → Install Add-on From File
 3. Restart Zotero
 4. Confirm `zoterU` appears in Zotero preferences
+
+### Version History
+
+| Version | Highlights |
+|---------|-----------|
+| v2.0.1 | Zotero 10 WebIDL globals fix (`fetch`/`AbortController`/`Headers`/`TextEncoder` resolved via main-window realm fallback; MinerU upload/download/request hardened) |
+| v2.0.0 | Knowledge base push (Z1) + soft-delete sync (Z2), per API contract v1 |
+| v1.5.0 | Zotero 10 compatibility |
+| v1.4.2 | MCP stdio bridge |
+
+The HTTP push targets the [composites knowledge base service](https://github.com/eric-sly/composites-kb); the wire format is frozen as API contract v1 (see that repo's `docs/api-contract-v1.md`).
 
 ### Setup
 
@@ -185,6 +196,10 @@ node --check preferences.js
 
 # Package XPI
 powershell -ExecutionPolicy Bypass -File scripts/build-xpi.ps1
+
+# Contract tests (65 checks, mock KB server)
+python scripts/test/mock-kb-server.py 18100 &
+node scripts/test/kb-push-test.mjs 18100
 ```
 
 ### License
@@ -207,10 +222,21 @@ MIT — see [LICENSE](LICENSE).
 
 ### 安装
 
-1. 从 [Releases](https://github.com/eric-sly/zoterU/releases) 下载 `zoterU-1.5.0.xpi`
+1. 从 [Releases](https://github.com/eric-sly/zoterU/releases) 下载 `zoterU-2.0.1.xpi`
 2. Zotero → 工具 → 插件 → ⚙️ → 从文件安装
 3. 重启 Zotero
 4. 确认设置中显示 `zoterU`
+
+### 版本历史
+
+| 版本 | 要点 |
+|------|------|
+| v2.0.1 | Zotero 10 WebIDL 全局修复（`fetch`/`AbortController`/`Headers`/`TextEncoder` 经主窗口 realm 兜底；MinerU 上传/下载/请求一并加固） |
+| v2.0.0 | 知识库推送（Z1）+ 删除软删同步（Z2），按 API 契约 v1 |
+| v1.5.0 | Zotero 10 兼容 |
+| v1.4.2 | MCP stdio 桥 |
+
+HTTP 推送的对接目标是 [复合材料知识库服务](https://github.com/eric-sly/composites-kb)；报文格式冻结为 API 契约 v1（见该仓 `docs/api-contract-v1.md`）。
 
 ### 设置
 
@@ -291,6 +317,10 @@ HTTP 推送行为（API 契约 v1）：
 
 ```bash
 powershell -ExecutionPolicy Bypass -File scripts/build-xpi.ps1
+
+# 契约测试（65 项，mock 知识库服务）
+python scripts/test/mock-kb-server.py 18100 &
+node scripts/test/kb-push-test.mjs 18100
 ```
 
 修改版本号：编辑 `manifest.json` 中的 `version` 字段。
