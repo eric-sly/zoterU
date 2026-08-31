@@ -175,3 +175,29 @@
 	color: #1d6e36;
 }
 
+
+/* 知识库私有区块折叠（开源版：默认收起，展开才见配置） */
+.mineru-kb-collapsible {
+	margin-top: 18px;
+	padding-top: 14px;
+	border-top: 1px solid #e2e2e2;
+}
+
+.mineru-kb-collapsible summary {
+	cursor: pointer;
+	font-size: 14px;
+	font-weight: bold;
+	color: #444;
+	padding: 4px 0;
+	user-select: none;
+}
+
+.mineru-kb-collapsible summary:hover {
+	color: #111;
+}
+
+.mineru-kb-collapsible .mineru-kb-section {
+	margin-top: 12px;
+	padding-top: 0;
+	border-top: none;
+}
