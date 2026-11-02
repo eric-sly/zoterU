@@ -6,5 +6,3 @@ zoteru-parse-selected =
     .label = Batch Parse with MinerU to Markdown Attachments
 zoteru-reparse-selected =
     .label = Re-parse and Replace Existing MinerU Markdown
-zoteru-export-kb =
-    .label = Push to Knowledge Base

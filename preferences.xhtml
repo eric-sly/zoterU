@@ -45,63 +45,6 @@
 			</html:div>
 		</html:div>
 
-		<html:details class="mineru-kb-collapsible">
-			<html:summary>知识库（私有，展开配置）</html:summary>
-			<html:div class="mineru-kb-section">
-				<html:h3>知识库服务（推送）</html:h3>
-				<html:div class="mineru-grid">
-					<html:label for="kb-root-path">知识库路径</html:label>
-					<html:input id="kb-root-path" type="text" placeholder="D:\path\to\knowledge-base" />
-
-					<html:label for="kb-service-url">知识库服务 URL</html:label>
-					<html:input id="kb-service-url" type="url" placeholder="http://192.168.1.105:8100" />
-
-					<html:label for="kb-api-token">知识库 API Token</html:label>
-					<html:input id="kb-api-token" type="password" placeholder="X-API-Token（向管理员获取）" />
-
-					<html:label>推送目标</html:label>
-					<html:div class="mineru-model-options">
-						<html:label>
-							<html:input type="checkbox" id="kb-export-local" />
-							导出到本地目录（兜底副本）
-						</html:label>
-						<html:label>
-							<html:input type="checkbox" id="kb-export-http" />
-							推送到 HTTP 服务（POST /documents）
-						</html:label>
-					</html:div>
-
-					<html:label>推送选项</html:label>
-					<html:div class="mineru-model-options">
-						<html:label>
-							<html:input type="checkbox" id="kb-push-include-pdf" />
-							默认携带原始 PDF（source_pdf；超 200MB 自动回退不带 PDF）
-						</html:label>
-						<html:label>
-							<html:input type="checkbox" id="kb-delete-sync-enabled" />
-							条目删除同步（进回收站/真删时通知服务端软删）
-						</html:label>
-						<html:label>
-							<html:input type="checkbox" id="kb-sync-tag-enabled" />
-							推送成功后写 #KB-Synced 标签
-						</html:label>
-					</html:div>
-
-					<html:label for="kb-push-timeout-sec">推送请求超时(秒)</html:label>
-					<html:input id="kb-push-timeout-sec" type="number" min="10" max="3600" step="10" />
-
-					<html:label for="kb-push-max-retries">推送失败重试次数</html:label>
-					<html:input id="kb-push-max-retries" type="number" min="0" max="10" step="1" />
-				</html:div>
-
-				<html:div class="mineru-actions">
-					<html:button id="kb-test-connection-button" type="button" class="mineru-small-button">测试连接（GET /health）</html:button>
-					<html:span id="kb-connection-status"></html:span>
-				</html:div>
-				<html:pre id="kb-connection-output" class="mineru-test-output"></html:pre>
-		</html:div>
-		</html:details>
-
 		<html:div class="mineru-actions">
 			<html:button id="mineru-save-button" type="button">保存设置</html:button>
 			<html:button id="mineru-refresh-usage-button" type="button">刷新 token 用量</html:button>

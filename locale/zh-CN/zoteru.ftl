@@ -6,5 +6,3 @@ zoteru-parse-selected =
     .label = 使用 MinerU 批量解析为带图 Markdown 附件
 zoteru-reparse-selected =
     .label = 重新解析并替换已有 MinerU Markdown 附件
-zoteru-export-kb =
-    .label = 推送到知识库
