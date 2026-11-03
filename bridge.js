@@ -48,7 +48,6 @@ var ZoteroMinerU = {
 		}
 	},
 
-
 	stop() {
 		if (!this.socket) return;
 		try {
@@ -538,14 +537,6 @@ var ZoteroMinerU = {
 			titlePrefix,
 			tokens
 		};
-	},
-
-	coercePrefBool(name, fallback) {
-		let value = Zotero.Prefs.get(this.PREF_BRANCH + name, true);
-		if (value === undefined || value === null || value === "") return fallback;
-		if (typeof value === "boolean") return value;
-		if (typeof value === "number") return value !== 0;
-		return !["false", "0", "no", "off"].includes(String(value).trim().toLowerCase());
 	},
 
 	getConfiguredTokens() {
